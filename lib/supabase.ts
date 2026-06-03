@@ -1,13 +1,37 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+if (!supabaseUrl) {
+  console.warn('NEXT_PUBLIC_SUPABASE_URL is not configured');
+}
+if (!supabaseAnonKey) {
+  console.warn('NEXT_PUBLIC_SUPABASE_ANON_KEY is not configured');
+}
 
-// Service role client for admin operations
-export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+const supabase = supabaseUrl && supabaseAnonKey
+  ? createClient(supabaseUrl, supabaseAnonKey)
+  : null;
+
+const supabaseAdmin = supabaseUrl && supabaseServiceKey
+  ? createClient(supabaseUrl, supabaseServiceKey)
+  : null;
+
+export function getSupabase() {
+  if (!supabase) {
+    throw new Error('NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are required to initialize Supabase');
+  }
+  return supabase;
+}
+
+export function getSupabaseAdmin() {
+  if (!supabaseAdmin) {
+    throw new Error('SUPABASE_SERVICE_ROLE_KEY is required to initialize Supabase admin client');
+  }
+  return supabaseAdmin;
+}
 
 // Database types
 export interface NewsletterSubscriber {
@@ -55,7 +79,7 @@ export interface AdminUser {
 // Newsletter functions
 export async function addNewsletterSubscriber(email: string) {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('newsletter_subscribers')
       .insert([
         {
@@ -76,7 +100,7 @@ export async function addNewsletterSubscriber(email: string) {
 
 export async function getNewsletterSubscribers() {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('newsletter_subscribers')
       .select('*')
       .eq('status', 'active')
@@ -92,7 +116,7 @@ export async function getNewsletterSubscribers() {
 
 export async function unsubscribeFromNewsletter(email: string) {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('newsletter_subscribers')
       .update({ status: 'unsubscribed' })
       .eq('email', email)
@@ -109,7 +133,7 @@ export async function unsubscribeFromNewsletter(email: string) {
 // Form submission functions
 export async function addFormSubmission(submission: Omit<FormSubmission, 'id' | 'created_at' | 'updated_at' | 'status'>) {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('form_submissions')
       .insert([
         {
@@ -129,7 +153,7 @@ export async function addFormSubmission(submission: Omit<FormSubmission, 'id' | 
 
 export async function getFormSubmissions() {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('form_submissions')
       .select('*')
       .order('created_at', { ascending: false });
@@ -144,7 +168,7 @@ export async function getFormSubmissions() {
 
 export async function updateSubmissionStatus(id: string, status: 'new' | 'reviewing' | 'responded') {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('form_submissions')
       .update({ status })
       .eq('id', id)
@@ -161,7 +185,7 @@ export async function updateSubmissionStatus(id: string, status: 'new' | 'review
 // Newsletter campaign functions
 export async function createNewsletterCampaign(campaign: Omit<NewsletterCampaign, 'id' | 'created_at' | 'updated_at' | 'sent_at'>) {
   try {
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await getSupabaseAdmin()
       .from('newsletter_campaigns')
       .insert([campaign])
       .select();
@@ -176,7 +200,7 @@ export async function createNewsletterCampaign(campaign: Omit<NewsletterCampaign
 
 export async function getNewsletterCampaigns() {
   try {
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await getSupabaseAdmin()
       .from('newsletter_campaigns')
       .select('*')
       .order('created_at', { ascending: false });
@@ -199,7 +223,7 @@ export async function updateCampaignStatus(id: string, status: 'draft' | 'schedu
       updateData.recipient_count = recipientCount;
     }
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await getSupabaseAdmin()
       .from('newsletter_campaigns')
       .update(updateData)
       .eq('id', id)
