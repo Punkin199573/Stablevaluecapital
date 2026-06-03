@@ -2,7 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { getNewsletterSubscribers, updateCampaignStatus, createNewsletterCampaign } from '@/lib/supabase';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+function getResend() {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) {
+    throw new Error('RESEND_API_KEY is not configured');
+  }
+  return new Resend(key);
+}
 
 // Helper to verify admin token
 function verifyAdminToken(token: string): boolean {
@@ -62,6 +68,15 @@ export async function POST(request: NextRequest) {
     }
 
     const subscribers = subscribersResult.data;
+    if (!process.env.RESEND_API_KEY) {
+      console.error('RESEND_API_KEY not configured');
+      return NextResponse.json(
+        { error: 'Email service not configured' },
+        { status: 500 }
+      );
+    }
+
+    const resend = getResend();
     let sentCount = 0;
     let failedCount = 0;
     const errors: string[] = [];

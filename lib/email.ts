@@ -1,6 +1,12 @@
 import { Resend } from 'resend'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+function getResend() {
+  const key = process.env.RESEND_API_KEY
+  if (!key) {
+    throw new Error('RESEND_API_KEY is not configured')
+  }
+  return new Resend(key)
+}
 
 interface EmailParams {
   type: 'business_loan' | 'contact' | 'general_inquiry'
@@ -19,6 +25,7 @@ export async function sendApplicationNotification({ type, data, applicationId }:
     const subject = getEmailSubject(type)
     const htmlContent = generateEmailContent(type, data, applicationId)
     
+    const resend = getResend()
     const result = await resend.emails.send({
       from: 'Stable Value Capital <noreply@stablevaluecapital.com>',
       to: ['info@stablevaluecapital.com'],

@@ -2,7 +2,13 @@ import { Resend } from 'resend';
 import { NextRequest, NextResponse } from 'next/server';
 import { addNewsletterSubscriber } from '@/lib/supabase';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+function getResend() {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) {
+    throw new Error('RESEND_API_KEY is not configured');
+  }
+  return new Resend(key);
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,6 +33,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Send welcome email using Resend
+    const resend = getResend();
     await resend.emails.send({
       from: 'Stable Value Capital <noreply@stablevaluecapital.com>',
       to: email,
