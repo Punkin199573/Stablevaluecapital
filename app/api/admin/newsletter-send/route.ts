@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { title, content, htmlContent } = body;
+    const { title, content, htmlContent, testMode, testEmail, recipientEmails } = body;
 
     // Validate required fields
     if (!title || !content) {
@@ -40,38 +40,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create campaign record
-    const campaignResult = await createNewsletterCampaign({
-      title,
-      content,
-      html_content: htmlContent || null,
-      status: 'draft',
-      recipient_count: 0,
-    });
-
-    if (!campaignResult.success || !campaignResult.data?.[0]) {
-      return NextResponse.json(
-        { error: 'Failed to create campaign' },
-        { status: 500 }
-      );
-    }
-
-    const campaignId = campaignResult.data[0].id;
-
-    // Get all active subscribers
-    const subscribersResult = await getNewsletterSubscribers();
-    if (!subscribersResult.success || !subscribersResult.data) {
-      return NextResponse.json(
-        { error: 'Failed to fetch subscribers' },
-        { status: 500 }
-      );
-    }
-
-    const subscribers = subscribersResult.data;
+    // Validate Resend API key is configured
     if (!process.env.RESEND_API_KEY) {
       console.error('RESEND_API_KEY not configured');
       return NextResponse.json(
-        { error: 'Email service not configured' },
+        { error: 'Email service (Resend) not configured' },
         { status: 500 }
       );
     }
@@ -80,39 +53,89 @@ export async function POST(request: NextRequest) {
     let sentCount = 0;
     let failedCount = 0;
     const errors: string[] = [];
+    let campaignId: string | null = null;
+    let targetRecipients: any[] = [];
 
-    // Send email to each subscriber
-    for (const subscriber of subscribers) {
+    // Determine target recipients
+    if (testMode && testEmail) {
+      // Test mode - send only to specified test email
+      targetRecipients = [{ email: testEmail }];
+    } else if (recipientEmails && recipientEmails.length > 0) {
+      // Custom recipients provided
+      targetRecipients = recipientEmails.map((email: string) => ({ email: email.trim() }));
+    } else {
+      // Default to all newsletter subscribers
+      const subscribersResult = await getNewsletterSubscribers();
+      if (!subscribersResult.success || !subscribersResult.data) {
+        return NextResponse.json(
+          { error: 'Failed to fetch subscribers' },
+          { status: 500 }
+        );
+      }
+      targetRecipients = subscribersResult.data;
+    }
+
+    // Create campaign record (skip for test mode)
+    if (!testMode) {
+      const campaignResult = await createNewsletterCampaign({
+        title,
+        content,
+        html_content: htmlContent || null,
+        status: 'draft',
+        recipient_count: targetRecipients.length,
+      });
+
+      if (!campaignResult.success || !campaignResult.data?.[0]) {
+        return NextResponse.json(
+          { error: 'Failed to create campaign' },
+          { status: 500 }
+        );
+      }
+
+      campaignId = campaignResult.data[0].id;
+    }
+
+    // Send email to each recipient
+    for (const recipient of targetRecipients) {
       try {
-        await resend.emails.send({
+        const emailResponse = await resend.emails.send({
           from: 'Stable Value Capital <noreply@stablevaluecapital.com>',
-          to: subscriber.email,
+          to: recipient.email,
           subject: title,
           html: htmlContent || generateDefaultHtml(content),
           replyTo: 'info@stablevaluecapital.com',
         });
-        sentCount++;
+
+        if (emailResponse.error) {
+          failedCount++;
+          errors.push(`Failed to send to ${recipient.email}: ${emailResponse.error.message}`);
+        } else {
+          sentCount++;
+        }
       } catch (error) {
         failedCount++;
-        errors.push(`Failed to send to ${subscriber.email}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        errors.push(`Failed to send to ${recipient.email}: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     }
 
-    // Update campaign status to sent
-    await updateCampaignStatus(campaignId, 'sent', sentCount);
+    // Update campaign status to sent (skip for test mode)
+    if (!testMode && campaignId) {
+      await updateCampaignStatus(campaignId, 'sent', sentCount);
+    }
 
     return NextResponse.json({
       success: true,
-      campaignId,
+      ...(campaignId && { campaignId }),
       sent: sentCount,
       failed: failedCount,
-      total: subscribers.length,
+      total: targetRecipients.length,
+      testMode: testMode || false,
       errors: errors.length > 0 ? errors : undefined,
     });
   } catch (error) {
     console.error('[v0] Newsletter send error:', error);
     return NextResponse.json(
-      { error: 'Failed to send newsletter' },
+      { error: error instanceof Error ? error.message : 'Failed to send newsletter' },
       { status: 500 }
     );
   }
