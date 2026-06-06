@@ -3,8 +3,8 @@ import { getFormSubmissions, updateSubmissionStatus } from '@/lib/supabase';
 
 // Helper to verify admin token
 function verifyAdminToken(token: string): boolean {
-  const adminToken = process.env.ADMIN_NEWSLETTER_TOKEN;
-  return adminToken && token === adminToken;
+  const adminToken = process.env.ADMIN_NEWSLETTER_TOKEN || process.env.NEXT_PUBLIC_ADMIN_TOKEN;
+  return !!adminToken && token === adminToken;
 }
 
 export async function GET(request: NextRequest) {

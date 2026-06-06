@@ -73,7 +73,7 @@ export default function AdminDashboard() {
       setIsAuthenticated(true)
       localStorage.setItem('admin_token', token)
       setMessage({ type: 'success', text: 'Admin access granted' })
-      fetchSubmissions()
+      fetchSubmissions(token)
       return true
     } catch (error) {
       console.error('[v0] Token validation error:', error)
@@ -93,12 +93,13 @@ export default function AdminDashboard() {
     await validateAdminToken(adminToken)
   }
 
-  const fetchSubmissions = async () => {
+  const fetchSubmissions = async (token?: string) => {
+    const authToken = token || adminToken
     setLoading(true)
     try {
       const response = await fetch('/api/admin/submissions', {
         headers: {
-          'Authorization': `Bearer ${adminToken}`,
+          'Authorization': `Bearer ${authToken}`,
         },
       })
       const data = await response.json()
@@ -252,7 +253,7 @@ export default function AdminDashboard() {
               </CardHeader>
               <CardContent>
                 <Button
-                  onClick={fetchSubmissions}
+                  onClick={() => fetchSubmissions()}
                   disabled={loading}
                   className="mb-4"
                 >
