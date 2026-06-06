@@ -35,6 +35,8 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(false)
   const [newsletterTitle, setNewsletterTitle] = useState('')
   const [newsletterContent, setNewsletterContent] = useState('')
+  const [newsletterHtmlContent, setNewsletterHtmlContent] = useState('')
+  const [recipientEmails, setRecipientEmails] = useState('')
   const [sendingNewsletter, setSendingNewsletter] = useState(false)
   const [authLoading, setAuthLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
@@ -140,33 +142,61 @@ export default function AdminDashboard() {
     }
   }
 
-  const handleSendNewsletter = async () => {
+  const handleSendNewsletter = async (testMode: boolean = false, testEmail?: string) => {
     if (!newsletterTitle || !newsletterContent) {
       setMessage({ type: 'error', text: 'Please fill in title and content' })
       return
     }
 
+    if (testMode && !testEmail) {
+      setMessage({ type: 'error', text: 'Test email address required' })
+      return
+    }
+
     setSendingNewsletter(true)
     try {
+      const body: any = {
+        title: newsletterTitle,
+        content: newsletterContent,
+      }
+
+      if (newsletterHtmlContent) {
+        body.htmlContent = newsletterHtmlContent
+      }
+
+      if (testMode) {
+        body.testMode = true
+        body.testEmail = testEmail
+      } else if (recipientEmails.trim()) {
+        // Split by comma and trim whitespace
+        const emails = recipientEmails.split(',').map(e => e.trim()).filter(e => e)
+        if (emails.length > 0) {
+          body.recipientEmails = emails
+        }
+      }
+
       const response = await fetch('/api/admin/newsletter-send', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${adminToken}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          title: newsletterTitle,
-          content: newsletterContent,
-        }),
+        body: JSON.stringify(body),
       })
       const data = await response.json()
       if (data.success) {
         setMessage({
           type: 'success',
-          text: `Newsletter sent to ${data.sent} subscribers, ${data.failed} failed`,
+          text: testMode 
+            ? `Test email sent to ${testEmail}` 
+            : `Newsletter sent to ${data.sent} recipients, ${data.failed} failed`,
         })
-        setNewsletterTitle('')
-        setNewsletterContent('')
+        if (!testMode) {
+          setNewsletterTitle('')
+          setNewsletterContent('')
+          setNewsletterHtmlContent('')
+          setRecipientEmails('')
+        }
       } else {
         setMessage({ type: 'error', text: data.error })
       }
@@ -320,7 +350,7 @@ export default function AdminDashboard() {
             <Card>
               <CardHeader>
                 <CardTitle>Send Newsletter</CardTitle>
-                <CardDescription>Compose and send newsletter to all active subscribers</CardDescription>
+                <CardDescription>Compose and send newsletter to subscribers or custom recipients</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
@@ -335,23 +365,61 @@ export default function AdminDashboard() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Newsletter Content
+                    Newsletter Content (Plain Text)
                   </label>
                   <Textarea
                     placeholder="Write your newsletter content here..."
                     value={newsletterContent}
                     onChange={(e) => setNewsletterContent(e.target.value)}
-                    rows={10}
+                    rows={8}
                   />
                 </div>
-                <Button
-                  onClick={handleSendNewsletter}
-                  disabled={sendingNewsletter}
-                  className="w-full"
-                >
-                  <Send className="w-4 h-4 mr-2" />
-                  {sendingNewsletter ? 'Sending...' : 'Send Newsletter'}
-                </Button>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    HTML Content (Optional)
+                  </label>
+                  <Textarea
+                    placeholder="Paste your custom HTML here (optional - will override plain text formatting)..."
+                    value={newsletterHtmlContent}
+                    onChange={(e) => setNewsletterHtmlContent(e.target.value)}
+                    rows={8}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    If provided, HTML content will be used instead of plain text. Leave empty to use auto-formatted plain text.
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Custom Recipients (Optional)
+                  </label>
+                  <Textarea
+                    placeholder="Enter email addresses separated by commas (e.g., user1@example.com, user2@example.com). Leave empty to send to all newsletter subscribers."
+                    value={recipientEmails}
+                    onChange={(e) => setRecipientEmails(e.target.value)}
+                    rows={3}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    If empty, newsletter will be sent to all active newsletter subscribers.
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Button
+                    onClick={() => handleSendNewsletter(false)}
+                    disabled={sendingNewsletter}
+                    className="flex-1"
+                  >
+                    <Send className="w-4 h-4 mr-2" />
+                    {sendingNewsletter ? 'Sending...' : 'Send Newsletter'}
+                  </Button>
+                  <Button
+                    onClick={() => handleSendNewsletter(true, 'punkin199573@gmail.com')}
+                    disabled={sendingNewsletter}
+                    variant="outline"
+                    className="flex-1"
+                  >
+                    📧 Send Test to punkin199573@gmail.com
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
