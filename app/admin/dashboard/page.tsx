@@ -36,26 +36,61 @@ export default function AdminDashboard() {
   const [newsletterTitle, setNewsletterTitle] = useState('')
   const [newsletterContent, setNewsletterContent] = useState('')
   const [sendingNewsletter, setSendingNewsletter] = useState(false)
+  const [authLoading, setAuthLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
-  // Check for token in URL or session
+  // Check for token in URL or in local storage and validate it
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search)
-    const token = urlParams.get('token')
+    const token = urlParams.get('token') || (typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null)
+
     if (token) {
       setAdminToken(token)
-      setIsAuthenticated(true)
-      window.history.replaceState({}, document.title, '/admin/dashboard')
+      validateAdminToken(token)
     }
   }, [])
 
-  const handleLogin = () => {
-    // In production, this should verify against the backend
-    if (adminToken === process.env.NEXT_PUBLIC_ADMIN_TOKEN) {
+  async function validateAdminToken(token: string) {
+    setAuthLoading(true)
+    setMessage(null)
+
+    try {
+      const response = await fetch('/api/admin/validate-token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        localStorage.removeItem('admin_token')
+        setIsAuthenticated(false)
+        setMessage({ type: 'error', text: 'Invalid or expired admin token' })
+        return false
+      }
+
       setIsAuthenticated(true)
-    } else {
-      setMessage({ type: 'error', text: 'Invalid admin token' })
+      localStorage.setItem('admin_token', token)
+      setMessage({ type: 'success', text: 'Admin access granted' })
+      fetchSubmissions()
+      return true
+    } catch (error) {
+      console.error('[v0] Token validation error:', error)
+      setMessage({ type: 'error', text: 'Failed to validate admin token' })
+      return false
+    } finally {
+      setAuthLoading(false)
     }
+  }
+
+  const handleLogin = async () => {
+    if (!adminToken.trim()) {
+      setMessage({ type: 'error', text: 'Please enter your admin token' })
+      return
+    }
+
+    await validateAdminToken(adminToken)
   }
 
   const fetchSubmissions = async () => {
@@ -155,14 +190,15 @@ export default function AdminDashboard() {
               placeholder="Admin token"
               value={adminToken}
               onChange={(e) => setAdminToken(e.target.value)}
+              disabled={authLoading}
             />
             {message && (
               <div className={`p-3 rounded text-sm ${message.type === 'error' ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
                 {message.text}
               </div>
             )}
-            <Button onClick={handleLogin} className="w-full">
-              Login
+            <Button onClick={handleLogin} className="w-full" disabled={authLoading}>
+              {authLoading ? 'Authenticating...' : 'Login'}
             </Button>
           </CardContent>
         </Card>
