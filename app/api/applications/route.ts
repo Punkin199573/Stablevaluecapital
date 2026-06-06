@@ -5,7 +5,20 @@ import { sendApplicationNotification } from '@/lib/email'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { firstName, lastName, email, phone, subject, message } = body
+    
+    // Handle both nested structure (type + data) and flat structure
+    let extractedBody: any
+    let formType = body.type || 'general_inquiry'
+    
+    if (body.type && body.data) {
+      // Nested structure from contact/business loan forms
+      extractedBody = body.data
+    } else {
+      // Flat structure from other forms
+      extractedBody = body
+    }
+
+    const { firstName, lastName, email, phone, subject, message } = extractedBody
 
     // Validate required fields
     if (!firstName || !lastName || !email || !message) {
@@ -45,8 +58,8 @@ export async function POST(request: NextRequest) {
 
     // Send admin notification email
     await sendApplicationNotification({
-      type: 'contact',
-      data: { firstName, lastName, email, phone, subject, message },
+      type: formType as 'business_loan' | 'contact' | 'general_inquiry',
+      data: extractedBody,
       applicationId: submissionId,
     })
 
