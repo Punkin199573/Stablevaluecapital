@@ -14,6 +14,29 @@ export default function ChatwootWidget() {
         return
       }
 
+      // Add CSS to position Chatwoot widget on the left side
+      const style = document.createElement('style')
+      style.textContent = `
+        .chatwoot-widget-holder {
+          position: fixed !important;
+          bottom: 20px !important;
+          left: 20px !important;
+          right: auto !important;
+          z-index: 99997 !important;
+        }
+        
+        .chatwoot-widget-container {
+          left: 0 !important;
+          right: auto !important;
+        }
+        
+        .chatwoot-dark-mode .chatwoot-widget-holder {
+          left: 20px !important;
+          right: auto !important;
+        }
+      `
+      document.head.appendChild(style)
+
       // Create and load Chatwoot SDK
       const script = document.createElement('script')
       script.src = `${baseUrl}/packs/js/sdk.js`
@@ -26,6 +49,16 @@ export default function ChatwootWidget() {
             baseUrl: baseUrl,
           })
         }
+
+        // Ensure widget is positioned on the left after initialization
+        setTimeout(() => {
+          const widget = document.querySelector('.chatwoot-widget-holder')
+          if (widget) {
+            widget.style.left = '20px'
+            widget.style.right = 'auto'
+            widget.style.bottom = '20px'
+          }
+        }, 500)
       }
       script.onerror = () => {
         console.error('Failed to load Chatwoot SDK')
@@ -38,6 +71,9 @@ export default function ChatwootWidget() {
       return () => {
         if (script.parentNode) {
           script.parentNode.removeChild(script)
+        }
+        if (style.parentNode) {
+          style.parentNode.removeChild(style)
         }
       }
     }
