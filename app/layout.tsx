@@ -2,6 +2,7 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Montserrat, Open_Sans } from "next/font/google"
 import "./globals.css"
+import ChatwootWidget from "@/components/chatwoot-widget"
 
 const montserrat = Montserrat({
   subsets: ["latin"],
@@ -35,50 +36,6 @@ export default function RootLayout({
         <script
           dangerouslySetInnerHTML={{
             __html: `
-              "use strict";
-              !function() {
-                var t = window.driftt = window.drift = window.driftt || [];
-                if (!t.init) {
-                  if (t.invoked) return void (window.console && console.error && console.error("Drift snippet included twice."));
-                  t.invoked = !0;
-                  t.methods = ["identify", "config", "track", "reset", "debug", "show", "ping", "page", "hide", "off", "on"];
-                  t.factory = function(e) {
-                    return function() {
-                      var n = Array.prototype.slice.call(arguments);
-                      return n.unshift(e), t.push(n), t;
-                    };
-                  };
-                  t.methods.forEach(function(e) {
-                    t[e] = t.factory(e);
-                  });
-                  t.load = function(t) {
-                    var e = 3e5, n = Math.ceil(new Date() / e) * e, o = document.createElement("script");
-                    o.type = "text/javascript";
-                    o.async = !0;
-                    o.crossorigin = "anonymous";
-                    o.src = "https://js.driftt.com/include/" + n + "/" + t + ".js";
-                    var i = document.getElementsByTagName("script")[0];
-                    i.parentNode.insertBefore(o, i);
-                  };
-                }
-              }();
-              drift.SNIPPET_VERSION = '0.3.1';
-              drift.load('nec9sduygwzy');
-              
-              // Position Drift widget at bottom left
-              drift.on('ready', function(api) {
-                setTimeout(function() {
-                  var widget = document.querySelector('#drift-widget-container') || 
-                              document.querySelector('.drift-widget') ||
-                              document.querySelector('[data-drift-chat-widget]');
-                  if (widget) {
-                    widget.style.left = '20px';
-                    widget.style.right = 'auto';
-                    widget.style.bottom = '20px';
-                  }
-                }, 1000);
-              });
-
               // WhatsApp Widget
               document.addEventListener('DOMContentLoaded', function() {
                 // Create WhatsApp toggle button
@@ -252,28 +209,6 @@ export default function RootLayout({
         <style
           dangerouslySetInnerHTML={{
             __html: `
-              /* Enhanced CSS for Drift positioning at bottom left */
-              #drift-widget-container,
-              .drift-widget,
-              [data-drift-chat-widget] {
-                left: 20px !important;
-                right: auto !important;
-                bottom: 20px !important;
-                z-index: 99997 !important;
-              }
-              
-              .drift-frame-controller {
-                left: 20px !important;
-                right: auto !important;
-                z-index: 99997 !important;
-              }
-              
-              .drift-frame-chat {
-                left: 20px !important;
-                right: auto !important;
-                z-index: 99997 !important;
-              }
-              
               /* Enhanced pulse animation for WhatsApp button with better visibility */
               @keyframes pulse-whatsapp {
                 0% {
@@ -290,7 +225,10 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className={`font-sans ${montserrat.variable} ${openSans.variable} antialiased`}>{children}</body>
+      <body className={`font-sans ${montserrat.variable} ${openSans.variable} antialiased`}>
+        <ChatwootWidget />
+        {children}
+      </body>
     </html>
   )
 }
