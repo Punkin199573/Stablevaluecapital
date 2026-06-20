@@ -104,21 +104,16 @@ export default function Footer() {
               <div>
                 <p className="font-medium text-foreground">United States</p>
                 <p>Hamburg, New York</p>
-                <p>+1 979 618 8876</p>
-              </div>
-              <div>
-                <p className="font-medium text-foreground">United Kingdom</p>
-                <p>London & Manchester</p>
-                <p>+44 7700 144320</p>
+                <p>+1 404 295 8687</p>
               </div>
               <div>
                 <p className="font-medium text-foreground">International</p>
                 <p>Global Operations</p>
-                <p>+44 7700 144320</p>
+                <p>+1 404 295 8687</p>
               </div>
               <div>
                 <p className="font-medium text-foreground">Banking Partner</p>
-                <p>HSBC bank</p>
+                <p>HSBC Bank</p>
                 <p>London, UK</p>
               </div>
             </div>

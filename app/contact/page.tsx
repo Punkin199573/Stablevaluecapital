@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ArrowRight, Phone, Mail, MapPin, Clock, Globe, Building2, Users, MessageSquare, Calendar, Loader2, CheckCircle, AlertCircle } from "lucide-react"
+import { ArrowRight, Phone, Mail, MapPin, Clock, Globe, Building2, Users, MessageSquare, Calendar, Loader as Loader2, CircleCheck as CheckCircle, CircleAlert as AlertCircle } from "lucide-react"
 import { motion } from "framer-motion"
 import { useState } from "react"
 import Navigation from "@/components/navigation"
@@ -128,7 +128,7 @@ export default function ContactPage() {
       city: "New York",
       country: "United States",
       address: "3123 CloverBank Road, Hamburg, NY 14075",
-      phone: "+1 979 618 8876",
+      phone: "+1 404 295 8687",
       email: "info@stablevaluecapital.com",
       timezone: "EST (UTC-5)",
       hours: "9:00 AM - 6:00 PM",
@@ -138,7 +138,7 @@ export default function ContactPage() {
       city: "London",
       country: "United Kingdom",
       address: "1 Canary Wharf, London E14 5AB",
-      phone: "+44 7700 144320",
+      phone: "+1 404 295 8687",
       email: "info@stablevaluecapital.com",
       timezone: "GMT (UTC+0)",
       hours: "9:00 AM - 5:30 PM",
@@ -148,7 +148,7 @@ export default function ContactPage() {
       city: "Dubai",
       country: "United Arab Emirates",
       address: "Digital Park - Building A1, Silicon Oasis",
-      phone: "+44 7700 144320",
+      phone: "+1 404 295 8687",
       email: "support@stablevaluecapital.com",
       timezone: "GST (UTC+4)",
       hours: "9:00 AM - 6:00 PM",

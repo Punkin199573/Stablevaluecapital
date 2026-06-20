@@ -6,12 +6,15 @@ export default function ChatwootWidget() {
   useEffect(() => {
     // Only load Chatwoot SDK on client side
     if (typeof window !== 'undefined') {
-      const baseUrl = process.env.NEXT_PUBLIC_CHATWOOT_BASE_URL
-      const websiteToken = process.env.NEXT_PUBLIC_CHATWOOT_WEBSITE_TOKEN
+      // Hardcoded production values
+      const baseUrl = 'https://app.chatwoot.com'
+      const websiteToken = 'm6GV11nqAz1SDcDm375sV7BL'
 
-      if (!baseUrl || !websiteToken) {
-        console.warn('Chatwoot configuration missing. Please set NEXT_PUBLIC_CHATWOOT_BASE_URL and NEXT_PUBLIC_CHATWOOT_WEBSITE_TOKEN')
-        return
+      // Set Chatwoot position to right side (WhatsApp is on left)
+      ;(window as any).chatwootSettings = {
+        position: 'right',
+        type: 'standard',
+        launcherTitle: 'Welcome to Stable Value Capital'
       }
 
       // Create and load Chatwoot SDK
@@ -20,8 +23,8 @@ export default function ChatwootWidget() {
       script.async = true
       script.onload = () => {
         // Initialize Chatwoot when SDK is loaded
-        if (window.chatwootSDK) {
-          window.chatwootSDK.run({
+        if ((window as any).chatwootSDK) {
+          (window as any).chatwootSDK.run({
             websiteToken: websiteToken,
             baseUrl: baseUrl,
           })
@@ -44,16 +47,4 @@ export default function ChatwootWidget() {
   }, [])
 
   return null
-}
-
-// TypeScript augmentation for window object
-declare global {
-  interface Window {
-    chatwootSDK: {
-      run: (config: {
-        websiteToken: string
-        baseUrl: string
-      }) => void
-    }
-  }
 }
