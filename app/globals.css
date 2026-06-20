@@ -4,40 +4,32 @@
 
 @layer base {
   :root {
-    /* Bright Futuristic Design - Electric Blue & Vibrant Cyan */
-    --background: 0 0% 98%; /* Almost white, very subtle gray */
-    --foreground: 220 25% 12%; /* Deep navy text */
-    --card: 0 0% 100%; /* Pure white cards */
-    --card-foreground: 220 25% 12%;
+    /* Professional Slate-based color scheme */
+    --background: 0 0% 100%; /* Pure white */
+    --foreground: 222 47% 11%; /* Slate-900 */
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 220 25% 12%;
-    --primary: 212 100% 50%; /* Electric Blue #0066FF */
-    --primary-foreground: 0 0% 100%; /* White text on blue */
-    --secondary: 180 100% 50%; /* Vibrant Cyan #00FFFF */
-    --secondary-foreground: 220 25% 12%; /* Navy text */
-    --muted: 0 0% 88%; /* Light gray muted */
-    --muted-foreground: 220 10% 45%; /* Medium gray text */
-    --accent: 268 100% 50%; /* Vibrant Purple accent */
-    --accent-foreground: 0 0% 100%; /* White text */
+    --popover-foreground: 222 47% 11%;
+    --primary: 222 47% 11%; /* Slate-900 */
+    --primary-foreground: 0 0% 100%; /* White on slate */
+    --secondary: 210 40% 96%; /* Slate-100 */
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%; /* Slate-500 */
+    --accent: 217 91% 60%; /* Blue-600 */
+    --accent-foreground: 0 0% 100%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 85%; /* Light gray borders */
-    --input: 0 0% 100%; /* White inputs */
-    --ring: 212 100% 50%; /* Electric blue ring */
-    --chart-1: 212 100% 50%;
-    --chart-2: 180 100% 50%;
-    --chart-3: 268 100% 50%;
-    --chart-4: 0 84% 60%;
-    --chart-5: 45 100% 60%;
-    --radius: 0.5rem;
-    --sidebar: 212 100% 50%;
-    --sidebar-foreground: 0 0% 100%;
-    --sidebar-primary: 0 0% 100%;
-    --sidebar-primary-foreground: 212 100% 50%;
-    --sidebar-accent: 180 100% 50%;
-    --sidebar-accent-foreground: 0 0% 15%;
-    --sidebar-border: 212 80% 40%;
-    --sidebar-ring: 180 100% 50%;
+    --border: 214 32% 91%; /* Slate-200 */
+    --input: 214 32% 91%;
+    --ring: 217 91% 60%;
+    --radius: 0.75rem;
+    --chart-1: 222 47% 11%;
+    --chart-2: 217 91% 60%;
+    --chart-3: 161 94% 30%;
+    --chart-4: 43 96% 56%;
+    --chart-5: 262 83% 58%;
 
     /* Font family variables */
     --font-heading: var(--font-montserrat);
@@ -45,54 +37,15 @@
     --font-sans: var(--font-open-sans);
   }
 
-  .dark {
-    /* Dark mode - Deep space with electric blue accents */
-    --background: 220 30% 8%; /* Very dark navy-blue */
-    --foreground: 0 0% 92%; /* Almost white text */
-    --card: 220 30% 12%;
-    --card-foreground: 0 0% 92%;
-    --popover: 220 30% 12%;
-    --popover-foreground: 0 0% 92%;
-    --primary: 212 100% 60%; /* Bright electric blue in dark mode */
-    --primary-foreground: 220 30% 8%;
-    --secondary: 180 100% 50%;
-    --secondary-foreground: 220 30% 8%;
-    --muted: 220 30% 20%;
-    --muted-foreground: 220 10% 65%;
-    --accent: 268 100% 60%;
-    --accent-foreground: 220 30% 8%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 92%;
-    --border: 220 30% 20%;
-    --input: 220 30% 15%;
-    --ring: 212 100% 60%;
-    --chart-1: 212 100% 60%;
-    --chart-2: 180 100% 50%;
-    --chart-3: 268 100% 60%;
-    --chart-4: 45 100% 60%;
-    --chart-5: 0 84% 60%;
-    --sidebar: 212 100% 50%;
-    --sidebar-foreground: 0 0% 92%;
-    --sidebar-primary: 180 100% 50%;
-    --sidebar-primary-foreground: 220 30% 8%;
-    --sidebar-accent: 268 100% 60%;
-    --sidebar-accent-foreground: 0 0% 92%;
-    --sidebar-border: 212 80% 30%;
-    --sidebar-ring: 180 100% 50%;
-  }
-
   * {
     @apply border-border;
   }
 
   body {
-    @apply bg-background text-foreground;
-    /* Clean white background with subtle borders */
-    background-color: hsl(0 0% 100%);
-    min-height: 100vh;
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
   }
 
-  /* Updated font classes to use the proper font variables from layout.tsx */
   .font-heading {
     font-family: var(--font-montserrat), system-ui, -apple-system, sans-serif;
   }
@@ -102,68 +55,45 @@
   }
 }
 
-/* Added smooth scrolling and enhanced focus states for accessibility */
+/* Smooth scrolling */
 html {
   scroll-behavior: smooth;
 }
 
-/* Enhanced focus states for accessibility */
+/* Enhanced focus states */
 *:focus-visible {
-  @apply outline-2 outline-offset-2 outline-primary;
+  @apply outline-2 outline-offset-2 outline-accent;
 }
 
-/* Custom scrollbar for webkit browsers */
+/* Custom scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 10px;
+  height: 10px;
 }
 
 ::-webkit-scrollbar-track {
-  @apply bg-muted;
+  @apply bg-slate-100;
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-primary/20 rounded-full;
+  @apply bg-slate-300 rounded-full;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-primary/40;
+  @apply bg-slate-400;
 }
 
-/* Section background variations */
-.section-alternate {
-  @apply bg-gradient-to-br from-blue-50 via-cyan-50 to-purple-50;
+/* Smooth transitions for interactive elements */
+a, button {
+  @apply transition-colors duration-200;
 }
 
-.section-primary {
-  @apply bg-gradient-to-r from-primary to-accent text-primary-foreground;
+/* Typography improvements */
+h1, h2, h3, h4, h5, h6 {
+  @apply tracking-tight;
 }
 
-.section-accent {
-  @apply bg-gradient-to-r from-secondary to-primary text-secondary-foreground;
-}
-
-/* Glassmorphism effect */
-.glass {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.glass-dark {
-  background: rgba(30, 41, 59, 0.7);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(148, 163, 184, 0.1);
-}
-
-/* Gradient text */
-.gradient-text {
-  background: linear-gradient(135deg, hsl(212 100% 50%) 0%, hsl(180 100% 50%) 100%);
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-/* Smooth animations */
+/* Animations */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -186,23 +116,139 @@ html {
   }
 }
 
-@keyframes glow {
-  0%, 100% {
-    box-shadow: 0 0 20px rgba(0, 102, 255, 0.3);
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
   }
-  50% {
-    box-shadow: 0 0 30px rgba(0, 102, 255, 0.5);
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
   }
 }
 
 .animate-fade-in {
-  animation: fadeIn 0.5s ease-out;
+  animation: fadeIn 0.5s ease-out forwards;
 }
 
 .animate-slide-up {
-  animation: slideUp 0.6s ease-out;
+  animation: slideUp 0.6s ease-out forwards;
 }
 
-.animate-glow {
-  animation: glow 2s ease-in-out infinite;
+.animate-slide-in-right {
+  animation: slideInRight 0.6s ease-out forwards;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.4s ease-out forwards;
+}
+
+/* Gradient utilities */
+.gradient-primary {
+  @apply bg-gradient-to-r from-slate-900 to-blue-900;
+}
+
+.gradient-accent {
+  @apply bg-gradient-to-r from-blue-600 to-cyan-500;
+}
+
+.gradient-subtle {
+  @apply bg-gradient-to-br from-slate-50 to-white;
+}
+
+/* Text gradient */
+.text-gradient {
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-blue-600;
+}
+
+/* Card hover effect */
+.card-hover {
+  @apply transition-all duration-300 hover:shadow-lg hover:-translate-y-1;
+}
+
+/* Button base styles */
+.btn-primary {
+  @apply bg-slate-900 text-white hover:bg-slate-800 shadow-lg shadow-slate-900/20;
+}
+
+.btn-secondary {
+  @apply bg-white text-slate-900 border-2 border-slate-200 hover:border-slate-300 hover:bg-slate-50;
+}
+
+/* Section padding */
+.section-padding {
+  @apply py-20 sm:py-28 px-4 sm:px-6 lg:px-8;
+}
+
+/* Container max width utilities */
+.container-narrow {
+  @apply container max-w-4xl mx-auto;
+}
+
+.container-wide {
+  @apply container max-w-7xl mx-auto;
+}
+
+.container-full {
+  @apply container max-w-[90rem] mx-auto;
+}
+
+/* Glass effect */
+.glass {
+  @apply bg-white/80 backdrop-blur-xl border border-white/20;
+}
+
+.glass-dark {
+  @apply bg-slate-900/80 backdrop-blur-xl border border-slate-700/50;
+}
+
+/* Animation delays for staggered effects */
+.animation-delay-100 { animation-delay: 100ms; }
+.animation-delay-200 { animation-delay: 200ms; }
+.animation-delay-300 { animation-delay: 300ms; }
+.animation-delay-400 { animation-delay: 400ms; }
+.animation-delay-500 { animation-delay: 500ms; }
+
+/* Aspect ratios */
+.aspect-card {
+  aspect-ratio: 3 / 4;
+}
+
+.aspect-wide {
+  aspect-ratio: 16 / 9;
+}
+
+/* Line clamp utilities */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }

@@ -34,10 +34,10 @@ export default function Navigation({ currentPage }: NavigationProps) {
   ]
 
   return (
-    <nav className="sticky top-0 z-50 w-full border-b border-gray-200 bg-white/95 backdrop-blur-xl">
-      <div className="container flex h-20 items-center justify-between">
-        <Link href="/" className="flex items-center space-x-3">
-          <div className="relative h-12 w-12 sm:h-14 sm:w-14 flex-shrink-0">
+    <nav className="sticky top-0 z-50 w-full border-b border-slate-200 bg-white/95 backdrop-blur-xl shadow-sm">
+      <div className="container flex h-24 items-center justify-between">
+        <Link href="/" className="flex items-center space-x-4 group">
+          <div className="relative h-16 w-16 sm:h-20 sm:w-20 flex-shrink-0 bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl p-1.5 shadow-sm group-hover:shadow-md transition-shadow">
             <Image
               src="/logo.png"
               alt="Stable Value Capital"
@@ -47,61 +47,88 @@ export default function Navigation({ currentPage }: NavigationProps) {
             />
           </div>
           <div className="hidden sm:block">
-            <span className="font-heading font-bold text-lg lg:text-xl text-primary">
+            <span className="font-heading font-bold text-xl lg:text-2xl text-slate-900 block leading-tight">
               Stable Value
             </span>
-            <div className="text-xs lg:text-sm text-muted-foreground font-medium">Capital</div>
+            <span className="text-sm lg:text-base text-slate-500 font-medium tracking-wide">
+              Capital
+            </span>
           </div>
         </Link>
 
-        <div className="hidden lg:flex items-center space-x-8">
+        <div className="hidden lg:flex items-center space-x-1">
           {navigationItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              className={`text-foreground hover:text-primary transition-colors font-medium ${
-                currentPage === item.href ? "text-primary" : ""
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                currentPage === item.href
+                  ? "text-slate-900 bg-slate-100"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
               }`}
             >
               {item.label}
             </Link>
           ))}
+        </div>
+
+        <div className="hidden lg:flex items-center gap-4">
+          <a
+            href="tel:+14042958687"
+            className="text-sm text-slate-600 hover:text-slate-900 transition-colors"
+          >
+            +1 404 295 8687
+          </a>
           <Link href="/contact">
             <Button
               size="lg"
-              className="bg-primary hover:bg-primary/90 text-white shadow-md"
+              className="h-12 px-6 bg-slate-900 hover:bg-slate-800 text-white shadow-lg shadow-slate-900/20 rounded-lg"
             >
               Get Started
             </Button>
           </Link>
         </div>
 
-        <button className="lg:hidden" onClick={() => setIsMenuOpen(!isMenuOpen)}>
-          {isMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+        <button
+          className="lg:hidden p-2 rounded-lg hover:bg-slate-100 transition-colors"
+          onClick={() => setIsMenuOpen(!isMenuOpen)}
+          aria-label="Toggle menu"
+        >
+          {isMenuOpen ? <X className="h-6 w-6 text-slate-700" /> : <Menu className="h-6 w-6 text-slate-700" />}
         </button>
       </div>
 
       {/* Mobile Menu */}
       {isMenuOpen && (
-        <div className="lg:hidden border-t bg-background/95 backdrop-blur-xl">
-          <div className="container py-6 space-y-4">
+        <div className="lg:hidden border-t border-slate-200 bg-white/95 backdrop-blur-xl">
+          <div className="container py-6 space-y-2">
             {navigationItems.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`block text-foreground hover:text-primary transition-colors font-medium ${
-                  currentPage === item.href ? "text-primary" : ""
+                className={`block px-4 py-3 rounded-lg font-medium transition-colors ${
+                  currentPage === item.href
+                    ? "text-slate-900 bg-slate-100"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                 }`}
                 onClick={() => setIsMenuOpen(false)}
               >
                 {item.label}
               </Link>
             ))}
-            <Link href="/contact" onClick={() => setIsMenuOpen(false)}>
-              <Button size="lg" className="w-full bg-primary hover:bg-primary/90 text-white">
-                Get Started
-              </Button>
-            </Link>
+            <div className="pt-4 border-t border-slate-200">
+              <a
+                href="tel:+14042958687"
+                className="block px-4 py-2 text-sm text-slate-600"
+              >
+                Call: +1 404 295 8687
+              </a>
+              <Link href="/contact" onClick={() => setIsMenuOpen(false)}>
+                <Button className="w-full mt-2 bg-slate-900 hover:bg-slate-800 text-white">
+                  Get Started
+                </Button>
+              </Link>
+            </div>
           </div>
         </div>
       )}
