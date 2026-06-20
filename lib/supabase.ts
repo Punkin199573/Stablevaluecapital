@@ -213,14 +213,14 @@ export async function getNewsletterCampaigns() {
   }
 }
 
-export async function updateCampaignStatus(id: string, status: 'draft' | 'scheduled' | 'sent', recipientCount?: number) {
+export async function updateCampaignStatus(id: string, status: 'draft' | 'scheduled' | 'sent', sentCount?: number) {
   try {
     const updateData: any = { status };
     if (status === 'sent') {
       updateData.sent_at = new Date().toISOString();
     }
-    if (recipientCount !== undefined) {
-      updateData.recipient_count = recipientCount;
+    if (sentCount !== undefined) {
+      updateData.sent_count = sentCount;
     }
 
     const { data, error } = await getSupabaseAdmin()
