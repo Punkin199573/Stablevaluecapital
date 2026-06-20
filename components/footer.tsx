@@ -33,8 +33,7 @@ export default function Footer() {
               <p>Serving Global Investors & Institutions</p>
               <div className="mt-4 space-y-1">
                 <p className="font-medium">Contact:</p>
-                <p>London, United Kingdom</p>
-                <p>Phone: +44 7700 144320</p>
+                <p>Phone: +1 404 295 8687</p>
                 <p>Email: info@stablevaluecapital.com</p>
               </div>
             </div>
