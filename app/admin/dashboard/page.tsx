@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
-import { Mail, FileText, LogOut, Send, Users, History, CheckCircle, Clock, AlertCircle, Loader2, Trash2, Eye } from 'lucide-react'
+import { Mail, FileText, LogOut, Send, Users, History, CircleCheck as CheckCircle, Clock, CircleAlert as AlertCircle, Loader as Loader2, TrendingUp, Eye, ChartBar as BarChart3, RefreshCw } from 'lucide-react'
 
 interface FormSubmission {
   id: string
@@ -31,7 +31,21 @@ interface NewsletterCampaign {
   recipient_count: number
   sent_count: number
   failed_count: number
+  opens_count?: number
+  clicks_count?: number
+  delivered_count?: number
+  bounced_count?: number
+  last_analytics_sync?: string
   created_at: string
+}
+
+interface AnalyticsStats {
+  totalSent: number
+  delivered: number
+  bounced: number
+  opened: number
+  clicked: number
+  complained: number
 }
 
 export default function AdminDashboard() {
@@ -39,8 +53,10 @@ export default function AdminDashboard() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [submissions, setSubmissions] = useState<FormSubmission[]>([])
   const [campaigns, setCampaigns] = useState<NewsletterCampaign[]>([])
+  const [analyticsStats, setAnalyticsStats] = useState<AnalyticsStats | null>(null)
   const [loading, setLoading] = useState(false)
   const [campaignsLoading, setCampaignsLoading] = useState(false)
+  const [analyticsLoading, setAnalyticsLoading] = useState(false)
 
   // Newsletter form state
   const [newsletterTitle, setNewsletterTitle] = useState('')
@@ -92,6 +108,39 @@ Adams Fenton
 Investment Consultant & Loan Sourcing Specialist
 Stable Value Capital
 Website: www.stablevaluecapital.com`,
+    },
+    {
+      id: 'marketing2',
+      name: 'Marketing Outreach 2',
+      subject: 'Unlock Capital for Your Vision | Stable Value Capital',
+      content: `Your Vision. Our Capital. Limitless Potential.
+
+Dear Business Leader,
+
+Every great venture begins with a vision. At Stable Value Capital, we transform visions into reality by connecting ambitious businesses with the capital they deserve.
+
+Why Choose Us?
+• Direct Access to 200+ Private Investors & Equity Partners
+• Project Funding from $10M to $500M+
+• Rapid Response — Initial Review Within 48 Hours
+• Global Reach — Serving Clients Across 40+ Countries
+
+Our Expertise:
+Wealth Management | Private Placements | Project Funding
+Business Loans | Securities Lending
+
+The SVC Advantage:
+Our investors don't just provide capital — they bring expertise, networks, and a genuine commitment to seeing your business thrive. We structure each partnership for long-term success.
+
+Ready to Scale?
+Reply with a brief description of your project and funding needs. We'll respond within 24 hours with a tailored pathway to secure the capital you require.
+
+Let's build something remarkable together.
+
+Adams Fenton
+Investment Consultant
+Stable Value Capital
+www.stablevaluecapital.com | +1 404 295 8687`,
     },
     {
       id: 'welcome',
@@ -196,6 +245,7 @@ The Stable Value Capital Team`,
       setMessage({ type: 'success', text: 'Admin access granted' })
       fetchSubmissions(token)
       fetchCampaigns(token)
+      fetchAnalytics(token)
       return true
     } catch (error) {
       console.error('[v0] Token validation error:', error)
@@ -257,6 +307,46 @@ The Stable Value Capital Team`,
     }
   }
 
+  const fetchAnalytics = async (token?: string) => {
+    const authToken = token || adminToken
+    setAnalyticsLoading(true)
+    try {
+      const response = await fetch('/api/admin/analytics', {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+        },
+      })
+      const data = await response.json()
+      if (data.success) {
+        setAnalyticsStats(data.stats)
+      }
+    } catch (error) {
+      console.error('Failed to fetch analytics:', error)
+    } finally {
+      setAnalyticsLoading(false)
+    }
+  }
+
+  const syncCampaignAnalytics = async (campaignId: string, emailIds: string[]) => {
+    try {
+      const response = await fetch('/api/admin/analytics', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${adminToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ campaignId, resendEmailIds: emailIds }),
+      })
+      const data = await response.json()
+      if (data.success) {
+        fetchCampaigns()
+        setMessage({ type: 'success', text: 'Analytics synced successfully' })
+      }
+    } catch (error) {
+      console.error('Failed to sync analytics:', error)
+    }
+  }
+
   const handleUpdateStatus = async (submissionId: string, newStatus: 'new' | 'reviewing' | 'responded') => {
     try {
       const response = await fetch('/api/admin/submissions', {
@@ -312,6 +402,7 @@ The Stable Value Capital Team`,
         title: newsletterTitle,
         content: newsletterContent,
         useTemplate: selectedTemplate !== 'custom',
+        templateId: selectedTemplate,
       }
 
       if (newsletterHtmlContent) {
@@ -351,6 +442,7 @@ The Stable Value Capital Team`,
           setRecipientEmails('')
           setSelectedTemplate('custom')
           fetchCampaigns()
+          fetchAnalytics()
         }
       } else {
         setMessage({ type: 'error', text: data.error })
@@ -440,7 +532,7 @@ The Stable Value Capital Team`,
         )}
 
         <Tabs defaultValue="newsletter" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 bg-white shadow-sm">
+          <TabsList className="grid w-full grid-cols-4 bg-white shadow-sm">
             <TabsTrigger value="newsletter" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-slate-900 data-[state=active]:to-blue-900 data-[state=active]:text-white">
               <Mail className="w-4 h-4 mr-2" />
               Send Newsletter
@@ -448,6 +540,10 @@ The Stable Value Capital Team`,
             <TabsTrigger value="campaigns" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-slate-900 data-[state=active]:to-blue-900 data-[state=active]:text-white">
               <History className="w-4 h-4 mr-2" />
               Campaign History
+            </TabsTrigger>
+            <TabsTrigger value="analytics" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-slate-900 data-[state=active]:to-blue-900 data-[state=active]:text-white">
+              <BarChart3 className="w-4 h-4 mr-2" />
+              Analytics
             </TabsTrigger>
             <TabsTrigger value="submissions" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-slate-900 data-[state=active]:to-blue-900 data-[state=active]:text-white">
               <FileText className="w-4 h-4 mr-2" />
@@ -471,7 +567,7 @@ The Stable Value Capital Team`,
                   <label className="block text-sm font-semibold text-slate-700 mb-3">
                     Email Template
                   </label>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                     <Button
                       onClick={() => handleTemplateSelect('custom')}
                       variant={selectedTemplate === 'custom' ? 'default' : 'outline'}
@@ -638,7 +734,7 @@ The Stable Value Capital Team`,
                               {campaign.status.toUpperCase()}
                             </Badge>
                           </div>
-                          <div className="grid grid-cols-3 gap-4 text-sm">
+                          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm mb-4">
                             <div className="bg-slate-50 rounded-lg p-3">
                               <div className="text-slate-500 mb-1">Recipients</div>
                               <div className="font-bold text-lg text-slate-900">{campaign.recipient_count}</div>
@@ -655,10 +751,178 @@ The Stable Value Capital Team`,
                               </div>
                               <div className="font-bold text-lg text-red-700">{campaign.failed_count}</div>
                             </div>
+                            <div className="bg-blue-50 rounded-lg p-3">
+                              <div className="text-blue-600 mb-1 flex items-center gap-1">
+                                <Eye className="w-3 h-3" /> Opens
+                              </div>
+                              <div className="font-bold text-lg text-blue-700">{campaign.opens_count || 0}</div>
+                            </div>
+                            <div className="bg-purple-50 rounded-lg p-3">
+                              <div className="text-purple-600 mb-1 flex items-center gap-1">
+                                <TrendingUp className="w-3 h-3" /> Clicks
+                              </div>
+                              <div className="font-bold text-lg text-purple-700">{campaign.clicks_count || 0}</div>
+                            </div>
                           </div>
+                          {campaign.last_analytics_sync && (
+                            <p className="text-xs text-slate-400">
+                              Last synced: {new Date(campaign.last_analytics_sync).toLocaleString()}
+                            </p>
+                          )}
                         </CardContent>
                       </Card>
                     ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Analytics Tab */}
+          <TabsContent value="analytics" className="space-y-4 mt-6">
+            <Card className="shadow-lg border-slate-200">
+              <CardHeader className="border-b border-slate-100">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <BarChart3 className="w-5 h-5 text-blue-600" />
+                      Email Analytics
+                    </CardTitle>
+                    <CardDescription>Track email delivery, opens, clicks, and engagement</CardDescription>
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => fetchAnalytics()}
+                    disabled={analyticsLoading}
+                  >
+                    {analyticsLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                    )}
+                    Refresh
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-6">
+                {analyticsStats ? (
+                  <div className="space-y-6">
+                    {/* Stats Grid */}
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                      <Card className="bg-gradient-to-br from-slate-50 to-slate-100 border-slate-200">
+                        <CardContent className="pt-6 text-center">
+                          <Mail className="w-8 h-8 mx-auto mb-2 text-slate-600" />
+                          <div className="text-3xl font-bold text-slate-900">{analyticsStats.totalSent}</div>
+                          <div className="text-sm text-slate-500">Total Sent</div>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+                        <CardContent className="pt-6 text-center">
+                          <CheckCircle className="w-8 h-8 mx-auto mb-2 text-green-600" />
+                          <div className="text-3xl font-bold text-green-700">{analyticsStats.delivered}</div>
+                          <div className="text-sm text-green-600">Delivered</div>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+                        <CardContent className="pt-6 text-center">
+                          <Eye className="w-8 h-8 mx-auto mb-2 text-blue-600" />
+                          <div className="text-3xl font-bold text-blue-700">{analyticsStats.opened}</div>
+                          <div className="text-sm text-blue-600">Opened</div>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
+                        <CardContent className="pt-6 text-center">
+                          <TrendingUp className="w-8 h-8 mx-auto mb-2 text-purple-600" />
+                          <div className="text-3xl font-bold text-purple-700">{analyticsStats.clicked}</div>
+                          <div className="text-sm text-purple-600">Clicked</div>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200">
+                        <CardContent className="pt-6 text-center">
+                          <AlertCircle className="w-8 h-8 mx-auto mb-2 text-red-600" />
+                          <div className="text-3xl font-bold text-red-700">{analyticsStats.bounced}</div>
+                          <div className="text-sm text-red-600">Bounced</div>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
+                        <CardContent className="pt-6 text-center">
+                          <AlertCircle className="w-8 h-8 mx-auto mb-2 text-orange-600" />
+                          <div className="text-3xl font-bold text-orange-700">{analyticsStats.complained}</div>
+                          <div className="text-sm text-orange-600">Spam Reports</div>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    {/* Engagement Rates */}
+                    <Card className="border-slate-200">
+                      <CardHeader>
+                        <CardTitle className="text-lg">Engagement Rates</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-4">
+                          <div>
+                            <div className="flex justify-between mb-1">
+                              <span className="text-sm text-slate-600">Delivery Rate</span>
+                              <span className="text-sm font-bold text-slate-900">
+                                {analyticsStats.totalSent > 0
+                                  ? Math.round((analyticsStats.delivered / analyticsStats.totalSent) * 100)
+                                  : 0}%
+                              </span>
+                            </div>
+                            <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-green-500 rounded-full transition-all"
+                                style={{ width: `${analyticsStats.totalSent > 0 ? (analyticsStats.delivered / analyticsStats.totalSent) * 100 : 0}%` }}
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <div className="flex justify-between mb-1">
+                              <span className="text-sm text-slate-600">Open Rate</span>
+                              <span className="text-sm font-bold text-slate-900">
+                                {analyticsStats.delivered > 0
+                                  ? Math.round((analyticsStats.opened / analyticsStats.delivered) * 100)
+                                  : 0}%
+                              </span>
+                            </div>
+                            <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-blue-500 rounded-full transition-all"
+                                style={{ width: `${analyticsStats.delivered > 0 ? (analyticsStats.opened / analyticsStats.delivered) * 100 : 0}%` }}
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <div className="flex justify-between mb-1">
+                              <span className="text-sm text-slate-600">Click Rate</span>
+                              <span className="text-sm font-bold text-slate-900">
+                                {analyticsStats.opened > 0
+                                  ? Math.round((analyticsStats.clicked / analyticsStats.opened) * 100)
+                                  : 0}%
+                              </span>
+                            </div>
+                            <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-purple-500 rounded-full transition-all"
+                                style={{ width: `${analyticsStats.opened > 0 ? (analyticsStats.clicked / analyticsStats.opened) * 100 : 0}%` }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <p className="text-sm text-blue-800">
+                        <strong>Note:</strong> Analytics are fetched from Resend's API. For detailed per-email tracking, ensure open and click tracking is enabled on your Resend domain.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-12 text-slate-500">
+                    <BarChart3 className="w-16 h-16 mx-auto mb-4 text-slate-300" />
+                    <p className="text-lg font-medium">No analytics data</p>
+                    <p className="text-sm">Send some emails to see analytics</p>
                   </div>
                 )}
               </CardContent>

@@ -61,9 +61,17 @@ export interface NewsletterCampaign {
   title: string;
   content: string;
   html_content?: string;
-  status: 'draft' | 'scheduled' | 'sent';
+  status: 'draft' | 'scheduled' | 'sending' | 'sent' | 'failed';
   sent_at?: string;
   recipient_count: number;
+  sent_count: number;
+  failed_count: number;
+  opens_count?: number;
+  clicks_count?: number;
+  delivered_count?: number;
+  bounced_count?: number;
+  complained_count?: number;
+  last_analytics_sync?: string;
   created_at: string;
   updated_at: string;
 }

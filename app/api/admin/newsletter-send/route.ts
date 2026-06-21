@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { getNewsletterSubscribers, updateCampaignStatus, createNewsletterCampaign } from '@/lib/supabase';
+import { getSupabaseAdmin } from '@/lib/supabase';
 
 function getResend() {
   const key = process.env.RESEND_API_KEY;
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { title, content, htmlContent, testMode, testEmail, recipientEmails, useTemplate } = body;
+    const { title, content, htmlContent, testMode, testEmail, recipientEmails, useTemplate, templateId } = body;
 
     // Validate required fields
     if (!title || !content) {
@@ -114,8 +115,17 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Generate emails
-    const finalHtml = htmlContent || (useTemplate ? generateMarketingTemplate(content, title) : generateDefaultHtml(content, title));
+    // Generate emails - select template based on templateId
+    let finalHtml: string;
+    if (htmlContent) {
+      finalHtml = htmlContent;
+    } else if (templateId === 'marketing2') {
+      finalHtml = generateMarketingTemplate2(content, title);
+    } else if (useTemplate) {
+      finalHtml = generateMarketingTemplate(content, title);
+    } else {
+      finalHtml = generateDefaultHtml(content, title);
+    }
     const plainText = generatePlainText(content);
 
     console.log('[Newsletter] Sending emails...');
@@ -123,6 +133,7 @@ export async function POST(request: NextRequest) {
     // Send email to each recipient (limit to prevent timeout)
     const maxRecipients = 50; // Process in batches
     const recipientsToSend = targetRecipients.slice(0, maxRecipients);
+    const sentEmailIds: string[] = [];
 
     for (const recipient of recipientsToSend) {
       try {
@@ -143,7 +154,11 @@ export async function POST(request: NextRequest) {
           console.error('[Newsletter]', errorMsg);
         } else {
           sentCount++;
-          console.log('[Newsletter] Sent successfully to:', recipient.email);
+          const emailId = (emailResponse.data as any)?.id;
+          if (emailId) {
+            sentEmailIds.push(emailId);
+          }
+          console.log('[Newsletter] Sent successfully to:', recipient.email, 'ID:', emailId);
         }
       } catch (error) {
         failedCount++;
@@ -155,10 +170,28 @@ export async function POST(request: NextRequest) {
 
     console.log('[Newsletter] Send complete. Sent:', sentCount, 'Failed:', failedCount);
 
-    // Update campaign status (skip for test mode)
+    // Update campaign status and store email IDs for tracking (skip for test mode)
     if (!testMode && campaignId) {
       await updateCampaignStatus(campaignId, 'sent', sentCount);
       console.log('[Newsletter] Campaign status updated');
+
+      // Store email IDs for analytics tracking
+      if (sentEmailIds.length > 0) {
+        try {
+          const supabase = getSupabaseAdmin();
+          const trackingRecords = sentEmailIds.map((emailId, index) => ({
+            campaign_id: campaignId,
+            resend_email_id: emailId,
+            recipient_email: recipientsToSend[index]?.email || 'unknown',
+            status: 'sent' as const,
+          }));
+
+          await supabase.from('email_tracking').insert(trackingRecords);
+          console.log('[Newsletter] Stored', trackingRecords.length, 'email tracking records');
+        } catch (trackingError) {
+          console.error('[Newsletter] Failed to store tracking records:', trackingError);
+        }
+      }
     }
 
     return NextResponse.json({
@@ -168,6 +201,8 @@ export async function POST(request: NextRequest) {
       total: recipientsToSend.length,
       totalRecipients: targetRecipients.length,
       testMode: testMode || false,
+      campaignId,
+      emailIds: sentEmailIds,
       errors: errors.length > 0 ? errors : undefined,
     });
   } catch (error) {
@@ -379,4 +414,174 @@ function escapeHtml(unsafe: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+// Marketing Outreach 2 - Elegant, concise template
+function generateMarketingTemplate2(content: string, title: string): string {
+  return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${escapeHtml(title)}</title>
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
+</head>
+<body style="margin: 0; padding: 40px 20px; background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);">
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background: transparent;">
+    <tr>
+      <td align="center">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="620" style="max-width: 620px; margin: 0 auto;">
+
+          <!-- Luxurious Header with Gold Accents -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0f172a 100%); padding: 60px 50px; text-align: center; border-top-left-radius: 20px; border-top-right-radius: 20px; border-bottom: 3px solid #d4af37;">
+              <!-- Gold Logo Accent -->
+              <div style="margin-bottom: 30px;">
+                <div style="display: inline-block; background: linear-gradient(135deg, #d4af37 0%, #f4e4a6 50%, #d4af37 100%); padding: 16px 32px; border-radius: 4px; box-shadow: 0 8px 32px rgba(212, 175, 55, 0.3);">
+                  <span style="font-family: 'Georgia', serif; font-size: 28px; font-weight: 700; color: #0f172a; letter-spacing: 4px;">SVC</span>
+                </div>
+              </div>
+              <h1 style="font-family: 'Georgia', serif; font-size: 32px; font-weight: 400; color: #ffffff; margin: 0 0 16px 0; letter-spacing: 1px; line-height: 1.3;">
+                ${escapeHtml(title)}
+              </h1>
+              <div style="width: 80px; height: 2px; background: linear-gradient(90deg, transparent, #d4af37, transparent); margin: 0 auto;"></div>
+            </td>
+          </tr>
+
+          <!-- Hero Statement -->
+          <tr>
+            <td style="background: #ffffff; padding: 50px 50px 40px 50px; text-align: center;">
+              <p style="font-family: 'Georgia', serif; font-size: 22px; font-style: italic; color: #1e3a5f; margin: 0; line-height: 1.6;">
+                "Where Vision Meets Capital"
+              </p>
+            </td>
+          </tr>
+
+          <!-- Content -->
+          <tr>
+            <td style="background: #ffffff; padding: 0 50px 40px 50px;">
+              <div style="border-left: 3px solid #d4af37; padding-left: 24px;">
+                ${formatContentElegant(content)}
+              </div>
+            </td>
+          </tr>
+
+          <!-- CTA Section -->
+          <tr>
+            <td style="background: #ffffff; padding: 0 50px 50px 50px; text-align: center;">
+              <a href="https://www.stablevaluecapital.com/contact" style="display: inline-block; padding: 18px 40px; background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%); color: #ffffff; text-decoration: none; font-family: 'Georgia', serif; font-size: 16px; font-weight: 600; border-radius: 4px; border: 1px solid #d4af37; box-shadow: 0 8px 24px rgba(15, 23, 42, 0.3);">
+                Begin Your Journey
+              </a>
+              <p style="font-family: 'Open Sans', sans-serif; font-size: 13px; color: #64748b; margin: 20px 0 0 0;">
+                or reply directly to this email
+              </p>
+            </td>
+          </tr>
+
+          <!-- Stats Bar -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); padding: 30px 50px;">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr>
+                  <td align="center" width="33%">
+                    <div style="font-family: 'Georgia', serif; font-size: 36px; font-weight: 700; color: #1e3a5f;">200+</div>
+                    <div style="font-family: 'Open Sans', sans-serif; font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 1px;">Investor Partners</div>
+                  </td>
+                  <td align="center" width="33%" style="border-left: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0;">
+                    <div style="font-family: 'Georgia', serif; font-size: 36px; font-weight: 700; color: #1e3a5f;">40+</div>
+                    <div style="font-family: 'Open Sans', sans-serif; font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 1px;">Countries Served</div>
+                  </td>
+                  <td align="center" width="33%">
+                    <div style="font-family: 'Georgia', serif; font-size: 36px; font-weight: 700; color: #1e3a5f;">$500M+</div>
+                    <div style="font-family: 'Open Sans', sans-serif; font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 1px;">Capital Deployed</div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Services Grid -->
+          <tr>
+            <td style="background: #ffffff; padding: 40px 50px;">
+              <p style="font-family: 'Georgia', serif; font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #d4af37; margin: 0 0 20px 0; text-align: center;">Our Expertise</p>
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #f1f5f9;">
+                    <span style="font-family: 'Open Sans', sans-serif; font-size: 14px; color: #334155;">&#9670;</span>
+                    <span style="font-family: 'Open Sans', sans-serif; font-size: 14px; color: #1e3a5f; margin-left: 8px;">Wealth Management & Portfolio Optimization</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #f1f5f9;">
+                    <span style="font-family: 'Open Sans', sans-serif; font-size: 14px; color: #334155;">&#9670;</span>
+                    <span style="font-family: 'Open Sans', sans-serif; font-size: 14px; color: #1e3a5f; margin-left: 8px;">Private Placements & Strategic Funds</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #f1f5f9;">
+                    <span style="font-family: 'Open Sans', sans-serif; font-size: 14px; color: #334155;">&#9670;</span>
+                    <span style="font-family: 'Open Sans', sans-serif; font-size: 14px; color: #1e3a5f; margin-left: 8px;">Project Funding & Capital Solutions</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #f1f5f9;">
+                    <span style="font-family: 'Open Sans', sans-serif; font-size: 14px; color: #334155;">&#9670;</span>
+                    <span style="font-family: 'Open Sans', sans-serif; font-size: 14px; color: #1e3a5f; margin-left: 8px;">Business Loans & Credit Enhancement</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 12px 0;">
+                    <span style="font-family: 'Open Sans', sans-serif; font-size: 14px; color: #334155;">&#9670;</span>
+                    <span style="font-family: 'Open Sans', sans-serif; font-size: 14px; color: #1e3a5f; margin-left: 8px;">Securities Lending Programs</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Elegant Footer -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%); padding: 50px; text-align: center; border-bottom-left-radius: 20px; border-bottom-right-radius: 20px;">
+              <p style="font-family: 'Georgia', serif; font-size: 24px; color: #d4af37; margin: 0 0 16px 0; letter-spacing: 2px;">
+                STABLE VALUE CAPITAL
+              </p>
+              <p style="font-family: 'Open Sans', sans-serif; font-size: 14px; color: #94a3b8; margin: 0 0 24px 0;">
+                Strategic Capital for Visionary Leaders
+              </p>
+              <div style="width: 60px; height: 1px; background: #d4af37; margin: 0 auto 24px auto;"></div>
+              <p style="font-family: 'Open Sans', sans-serif; font-size: 13px; color: #64748b; margin: 0 0 8px 0;">
+                <a href="https://www.stablevaluecapital.com" style="color: #94a3b8; text-decoration: none;">www.stablevaluecapital.com</a>
+              </p>
+              <p style="font-family: 'Open Sans', sans-serif; font-size: 13px; color: #64748b; margin: 0 0 8px 0;">
+                info@stablevaluecapital.com | +1 404 295 8687
+              </p>
+              <p style="font-family: 'Open Sans', sans-serif; font-size: 11px; color: #475569; margin: 16px 0 0 0;">
+                Hamburg, NY | London | Dubai
+              </p>
+              <p style="font-family: 'Open Sans', sans-serif; font-size: 10px; color: #334155; margin: 16px 0 0 0; opacity: 0.7;">
+                (c) 2024 Stable Value Capital. For Accredited & Sophisticated Investors Only.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
+function formatContentElegant(content: string): string {
+  const paragraphs = content.split('\n').filter(line => line.trim());
+  return paragraphs.map(p => `<p style="font-family: 'Open Sans', -apple-system, sans-serif; font-size: 15px; line-height: 1.8; color: #334155; margin: 0 0 16px 0;">${escapeHtml(p.trim())}</p>`).join('\n');
 }
