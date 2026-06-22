@@ -120,7 +120,7 @@ export default function RootLayout({
                         <div style="font-weight: 800; font-size: 16px; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
                           Support Team
                         </div>
-                        <div style="font-size: 14px; color: #666; font-weight: 600;">+1 404 295 8687</div>
+                        <div style="font-size: 14px; color: #666; font-weight: 600;">+1 404 295 8687 (USA) | +44 7342 300335 (UK)</div>
                       </div>
                     </a>
                   </div>

@@ -73,12 +73,14 @@ export default function Navigation({ currentPage }: NavigationProps) {
         </div>
 
         <div className="hidden lg:flex items-center gap-4">
-          <a
-            href="tel:+14042958687"
-            className="text-sm text-slate-600 hover:text-slate-900 transition-colors"
-          >
-            +1 404 295 8687
-          </a>
+          <div className="flex flex-col items-end text-sm">
+            <a href="tel:+14042958687" className="text-slate-600 hover:text-slate-900 transition-colors">
+              +1 404 295 8687
+            </a>
+            <a href="tel:+447342300335" className="text-green-600 hover:text-green-700 transition-colors text-xs">
+              +44 7342 300335
+            </a>
+          </div>
           <Link href="/contact">
             <Button
               size="lg"
@@ -121,7 +123,13 @@ export default function Navigation({ currentPage }: NavigationProps) {
                 href="tel:+14042958687"
                 className="block px-4 py-2 text-sm text-slate-600"
               >
-                Call: +1 404 295 8687
+                USA: +1 404 295 8687
+              </a>
+              <a
+                href="tel:+447342300335"
+                className="block px-4 py-2 text-sm text-green-600"
+              >
+                UK: +44 7342 300335
               </a>
               <Link href="/contact" onClick={() => setIsMenuOpen(false)}>
                 <Button className="w-full mt-2 bg-slate-900 hover:bg-slate-800 text-white">

@@ -436,7 +436,7 @@ export default function Home() {
                   variant="outline"
                   className="h-14 px-10 border-2 border-white/30 text-white hover:bg-white/10 rounded-lg"
                 >
-                  Call: +1 404 295 8687
+                  Call: +1 404 295 8687 (USA) | +44 7342 300335 (UK)
                 </Button>
               </div>
             </div>

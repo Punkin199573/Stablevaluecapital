@@ -264,7 +264,7 @@ Stable Value Capital
 Premium Wealth Management & Strategic Investment Solutions
 Website: https://www.stablevaluecapital.com
 Email: info@stablevaluecapital.com
-Phone: +1 404 295 8687
+USA: +1 404 295 8687 | UK: +44 7342 300335
 
 (c) 2024 Stable Value Capital. All rights reserved.
 
@@ -423,7 +423,7 @@ function generateMarketingTemplate(content: string, title: string): string {
               </p>
               <div style="border-top: 1px solid #334155; padding-top: 24px; margin-top: 24px;">
                 <p style="font-family: 'Open Sans', sans-serif; font-size: 13px; color: #94a3b8; margin: 0 0 8px 0;">
-                  Email: info@stablevaluecapital.com | Phone: +1 404 295 8687
+                  Email: info@stablevaluecapital.com | USA: +1 404 295 8687 | UK: +44 7342 300335
                 </p>
                 <p style="font-family: 'Open Sans', sans-serif; font-size: 12px; color: #64748b; margin: 0 0 12px 0;">
                   Hamburg, NY, USA | London, UK | Dubai, UAE

@@ -138,7 +138,7 @@ export default function ContactPage() {
       city: "London",
       country: "United Kingdom",
       address: "1 Canary Wharf, London E14 5AB",
-      phone: "+1 404 295 8687",
+      phone: "+44 7342 300335",
       email: "info@stablevaluecapital.com",
       timezone: "GMT (UTC+0)",
       hours: "9:00 AM - 5:30 PM",

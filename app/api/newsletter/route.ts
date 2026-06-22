@@ -135,7 +135,7 @@ function generateWelcomeEmailHtml(): string {
                 <a href="https://www.stablevaluecapital.com" style="color: #60a5fa; text-decoration: none;">www.stablevaluecapital.com</a>
               </p>
               <p style="font-size: 12px; color: #64748b; margin: 0;">
-                📧 info@stablevaluecapital.com &nbsp;|&nbsp; 📞 +1 404 295 8687<br><br>
+                📧 info@stablevaluecapital.com &nbsp;|&nbsp; 📞 +1 404 295 8687 | +44 7342 300335<br><br>
                 © 2024 Stable Value Capital. All rights reserved.
               </p>
             </td>
@@ -169,7 +169,7 @@ Stable Value Capital
 Strategic Capital Management for Discerning Investors
 Website: https://www.stablevaluecapital.com
 Email: info@stablevaluecapital.com
-Phone: +1 404 295 8687
+Phone: +1 404 295 8687 | UK: +44 7342 300335
 
 © 2024 Stable Value Capital. All rights reserved.`;
 }
