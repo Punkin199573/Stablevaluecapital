@@ -3,15 +3,14 @@ import { Resend } from 'resend';
 import { getNewsletterSubscribers, updateCampaignStatus, createNewsletterCampaign } from '@/lib/supabase';
 import { getSupabaseAdmin } from '@/lib/supabase';
 
-function getResend() {
+function getEmailClient() {
   const key = process.env.RESEND_API_KEY;
   if (!key) {
-    throw new Error('RESEND_API_KEY is not configured');
+    throw new Error('Email service not configured');
   }
   return new Resend(key);
 }
 
-// Helper to verify admin token
 function verifyAdminToken(token: string): boolean {
   const adminToken = process.env.ADMIN_NEWSLETTER_TOKEN || process.env.NEXT_PUBLIC_ADMIN_TOKEN;
   return !!adminToken && token === adminToken;
@@ -19,42 +18,30 @@ function verifyAdminToken(token: string): boolean {
 
 export async function POST(request: NextRequest) {
   try {
-    // Verify admin token
     const authHeader = request.headers.get('authorization');
     const token = authHeader?.replace('Bearer ', '') || '';
 
     if (!verifyAdminToken(token)) {
-      return NextResponse.json(
-        { error: 'Unauthorized - Invalid admin token' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const body = await request.json();
     const { title, content, htmlContent, testMode, testEmail, recipientEmails, useTemplate, templateId } = body;
 
-    // Validate required fields
     if (!title || !content) {
-      return NextResponse.json(
-        { error: 'Missing title or content' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Missing title or content' }, { status: 400 });
     }
 
-    // Validate Resend API key is configured
     if (!process.env.RESEND_API_KEY) {
-      console.error('[Newsletter] RESEND_API_KEY not configured');
-      return NextResponse.json(
-        { error: 'Email service (Resend) not configured. Please add RESEND_API_KEY to your environment variables.' },
-        { status: 500 }
-      );
+      console.error('[Newsletter] Email service not configured');
+      return NextResponse.json({ error: 'Email service not configured' }, { status: 500 });
     }
 
     console.log('[Newsletter] Starting send process...');
     console.log('[Newsletter] Title:', title);
-    console.log('[Newsletter] Test mode:', testMode);
 
-    const resend = getResend();
+    const emailClient = getEmailClient();
+    const supabase = getSupabaseAdmin();
     let sentCount = 0;
     let failedCount = 0;
     const errors: string[] = [];
@@ -63,41 +50,26 @@ export async function POST(request: NextRequest) {
 
     // Determine target recipients
     if (testMode && testEmail) {
-      // Test mode - send only to specified test email
       targetRecipients = [{ email: testEmail }];
-      console.log('[Newsletter] Test mode - sending to:', testEmail);
     } else if (recipientEmails && Array.isArray(recipientEmails) && recipientEmails.length > 0) {
-      // Custom recipients provided
       targetRecipients = recipientEmails.map((email: string) => ({ email: email.trim() })).filter(r => r.email);
-      console.log('[Newsletter] Custom recipients:', targetRecipients.length);
     } else {
-      // Default to all newsletter subscribers
-      console.log('[Newsletter] Fetching subscribers...');
       const subscribersResult = await getNewsletterSubscribers();
-      console.log('[Newsletter] Subscribers result:', subscribersResult.success, subscribersResult.data?.length);
-
       if (subscribersResult.success && subscribersResult.data && subscribersResult.data.length > 0) {
         targetRecipients = subscribersResult.data.map((s: any) => ({ email: s.email }));
       } else {
-        return NextResponse.json(
-          { error: 'No subscribers found. Add subscribers to your newsletter or provide custom email recipients.' },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: 'No subscribers found. Add subscribers or provide custom email recipients.' }, { status: 400 });
       }
     }
 
     if (targetRecipients.length === 0) {
-      return NextResponse.json(
-        { error: 'No recipients to send to' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'No recipients to send to' }, { status: 400 });
     }
 
     console.log('[Newsletter] Total recipients:', targetRecipients.length);
 
-    // Create campaign record (skip for test mode)
+    // Create campaign record
     if (!testMode) {
-      console.log('[Newsletter] Creating campaign record...');
       const campaignResult = await createNewsletterCampaign({
         title,
         content,
@@ -108,14 +80,10 @@ export async function POST(request: NextRequest) {
 
       if (campaignResult.success && campaignResult.data?.[0]) {
         campaignId = campaignResult.data[0].id;
-        console.log('[Newsletter] Campaign created:', campaignId);
-      } else {
-        console.error('[Newsletter] Failed to create campaign:', campaignResult.error);
-        // Continue anyway - don't block sending if campaign tracking fails
       }
     }
 
-    // Generate emails - select template based on templateId
+    // Generate emails
     let finalHtml: string;
     if (htmlContent) {
       finalHtml = htmlContent;
@@ -128,90 +96,160 @@ export async function POST(request: NextRequest) {
     }
     const plainText = generatePlainText(content);
 
-    console.log('[Newsletter] Sending emails...');
+    // Store all sent email IDs for tracking
+    const sentEmailIds: { emailId: string; recipient: string }[] = [];
 
-    // Send email to each recipient (limit to prevent timeout)
-    const maxRecipients = 50; // Process in batches
-    const recipientsToSend = targetRecipients.slice(0, maxRecipients);
-    const sentEmailIds: string[] = [];
+    // Process in batches - no limit on total, but batch size of 100 for API limits
+    const batchSize = 100;
+    const totalBatches = Math.ceil(targetRecipients.length / batchSize);
 
-    for (const recipient of recipientsToSend) {
+    for (let batchNum = 0; batchNum < totalBatches; batchNum++) {
+      const batchStart = batchNum * batchSize;
+      const batchEnd = Math.min(batchStart + batchSize, targetRecipients.length);
+      const batch = targetRecipients.slice(batchStart, batchEnd);
+
+      console.log(`[Newsletter] Processing batch ${batchNum + 1}/${totalBatches} (${batch.length} emails)`);
+
+      // Send batch using batch API for efficiency
       try {
-        console.log('[Newsletter] Sending to:', recipient.email);
-        const emailResponse = await resend.emails.send({
+        const batchPayload = batch.map(recipient => ({
           from: 'Stable Value Capital <noreply@stablevaluecapital.com>',
           to: recipient.email,
           subject: title,
           html: finalHtml,
           text: plainText,
           replyTo: 'info@stablevaluecapital.com',
-        });
+        }));
 
-        if (emailResponse.error) {
-          failedCount++;
-          const errorMsg = `Failed to send to ${recipient.email}: ${emailResponse.error.message}`;
-          errors.push(errorMsg);
-          console.error('[Newsletter]', errorMsg);
-        } else {
-          sentCount++;
-          const emailId = (emailResponse.data as any)?.id;
-          if (emailId) {
-            sentEmailIds.push(emailId);
+        // Send using batch endpoint
+        const batchResponse = await emailClient.batch.send(batchPayload);
+
+        if (batchResponse.data) {
+          for (let i = 0; i < batch.length; i++) {
+            const result = batchResponse.data[i];
+            if (result && (result as any).id) {
+              sentCount++;
+              sentEmailIds.push({
+                emailId: (result as any).id,
+                recipient: batch[i].email,
+              });
+            } else {
+              failedCount++;
+            }
           }
-          console.log('[Newsletter] Sent successfully to:', recipient.email, 'ID:', emailId);
+        } else if (batchResponse.error) {
+          // Fall back to individual sends for this batch
+          for (const recipient of batch) {
+            try {
+              const emailResponse = await emailClient.emails.send({
+                from: 'Stable Value Capital <noreply@stablevaluecapital.com>',
+                to: recipient.email,
+                subject: title,
+                html: finalHtml,
+                text: plainText,
+                replyTo: 'info@stablevaluecapital.com',
+              });
+
+              if (emailResponse.error) {
+                failedCount++;
+              } else {
+                sentCount++;
+                if (emailResponse.data && (emailResponse.data as any).id) {
+                  sentEmailIds.push({
+                    emailId: (emailResponse.data as any).id,
+                    recipient: recipient.email,
+                  });
+                }
+              }
+            } catch (e) {
+              failedCount++;
+              errors.push(`Failed: ${recipient.email}`);
+            }
+          }
         }
-      } catch (error) {
-        failedCount++;
-        const errorMsg = `Failed to send to ${recipient.email}: ${error instanceof Error ? error.message : 'Unknown error'}`;
-        errors.push(errorMsg);
-        console.error('[Newsletter]', errorMsg);
+      } catch (batchError) {
+        console.error('[Newsletter] Batch error, falling back to individual sends:', batchError);
+        // Fall back to individual sends
+        for (const recipient of batch) {
+          try {
+            const emailResponse = await emailClient.emails.send({
+              from: 'Stable Value Capital <noreply@stablevaluecapital.com>',
+              to: recipient.email,
+              subject: title,
+              html: finalHtml,
+              text: plainText,
+              replyTo: 'info@stablevaluecapital.com',
+            });
+
+            if (emailResponse.error) {
+              failedCount++;
+            } else {
+              sentCount++;
+              if (emailResponse.data && (emailResponse.data as any).id) {
+                sentEmailIds.push({
+                  emailId: (emailResponse.data as any).id,
+                  recipient: recipient.email,
+                });
+              }
+            }
+          } catch (e) {
+            failedCount++;
+            errors.push(`Failed: ${recipient.email}`);
+          }
+        }
+      }
+
+      // Store tracking records in batches of 500 to avoid payload limits
+      if (sentEmailIds.length >= 500 || (batchNum === totalBatches - 1 && sentEmailIds.length > 0)) {
+        if (!testMode && campaignId) {
+          try {
+            const trackingRecords = sentEmailIds.map(({ emailId, recipient }) => ({
+              campaign_id: campaignId,
+              resend_email_id: emailId,
+              recipient_email: recipient,
+              status: 'sent' as const,
+            }));
+
+            const { error: insertError } = await supabase
+              .from('email_tracking')
+              .insert(trackingRecords);
+
+            if (insertError) {
+              console.error('[Newsletter] Tracking insert error:', insertError);
+            }
+            sentEmailIds.length = 0; // Clear the array
+          } catch (e) {
+            console.error('[Newsletter] Failed to store tracking:', e);
+          }
+        }
+      }
+
+      // Small delay between batches to respect rate limits
+      if (batchNum < totalBatches - 1) {
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
     }
 
     console.log('[Newsletter] Send complete. Sent:', sentCount, 'Failed:', failedCount);
 
-    // Update campaign status and store email IDs for tracking (skip for test mode)
+    // Update campaign status
     if (!testMode && campaignId) {
       await updateCampaignStatus(campaignId, 'sent', sentCount);
-      console.log('[Newsletter] Campaign status updated');
-
-      // Store email IDs for analytics tracking
-      if (sentEmailIds.length > 0) {
-        try {
-          const supabase = getSupabaseAdmin();
-          const trackingRecords = sentEmailIds.map((emailId, index) => ({
-            campaign_id: campaignId,
-            resend_email_id: emailId,
-            recipient_email: recipientsToSend[index]?.email || 'unknown',
-            status: 'sent' as const,
-          }));
-
-          await supabase.from('email_tracking').insert(trackingRecords);
-          console.log('[Newsletter] Stored', trackingRecords.length, 'email tracking records');
-        } catch (trackingError) {
-          console.error('[Newsletter] Failed to store tracking records:', trackingError);
-        }
-      }
     }
 
     return NextResponse.json({
       success: true,
       sent: sentCount,
       failed: failedCount,
-      total: recipientsToSend.length,
-      totalRecipients: targetRecipients.length,
+      total: targetRecipients.length,
       testMode: testMode || false,
       campaignId,
-      emailIds: sentEmailIds,
-      errors: errors.length > 0 ? errors : undefined,
+      errors: errors.length > 0 ? errors.slice(0, 20) : undefined,
     });
   } catch (error) {
     console.error('[Newsletter] Send error:', error);
     return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : 'Failed to send newsletter',
-        details: error instanceof Error ? error.stack : undefined
-      },
+      { error: error instanceof Error ? error.message : 'Failed to send newsletter' },
       { status: 500 }
     );
   }
@@ -233,7 +271,6 @@ Phone: +1 404 295 8687
 To unsubscribe, reply to this email with "UNSUBSCRIBE" in the subject line.`;
 }
 
-// Helper function to format content with paragraphs
 function formatContent(content: string): string {
   const paragraphs = content.split('\n').filter(line => line.trim());
   return paragraphs.map(p => `<p style="font-family: 'Open Sans', -apple-system, sans-serif; font-size: 16px; line-height: 1.7; color: #334155; margin: 0 0 16px 0;">${escapeHtml(p.trim())}</p>`).join('\n');
@@ -407,16 +444,7 @@ function generateMarketingTemplate(content: string, title: string): string {
 </html>`;
 }
 
-function escapeHtml(unsafe: string): string {
-  return unsafe
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
-
-// Marketing Outreach 2 - Elegant, concise template
+// Marketing Outreach 2 - Professional, concise template
 function generateMarketingTemplate2(content: string, title: string): string {
   return `
 <!DOCTYPE html>
@@ -435,140 +463,79 @@ function generateMarketingTemplate2(content: string, title: string): string {
   </noscript>
   <![endif]-->
 </head>
-<body style="margin: 0; padding: 40px 20px; background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);">
-  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background: transparent;">
+<body style="margin: 0; padding: 40px 20px; background: #f8fafc;">
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f8fafc;">
     <tr>
       <td align="center">
-        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="620" style="max-width: 620px; margin: 0 auto;">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="640" style="max-width: 640px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);">
 
-          <!-- Luxurious Header with Gold Accents -->
+          <!-- Header with gradient -->
           <tr>
-            <td style="background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0f172a 100%); padding: 60px 50px; text-align: center; border-top-left-radius: 20px; border-top-right-radius: 20px; border-bottom: 3px solid #d4af37;">
-              <!-- Gold Logo Accent -->
-              <div style="margin-bottom: 30px;">
-                <div style="display: inline-block; background: linear-gradient(135deg, #d4af37 0%, #f4e4a6 50%, #d4af37 100%); padding: 16px 32px; border-radius: 4px; box-shadow: 0 8px 32px rgba(212, 175, 55, 0.3);">
-                  <span style="font-family: 'Georgia', serif; font-size: 28px; font-weight: 700; color: #0f172a; letter-spacing: 4px;">SVC</span>
-                </div>
+            <td style="background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%); padding: 48px 40px; text-align: center;">
+              <div style="background: #ffffff; border-radius: 8px; padding: 12px 24px; display: inline-block; margin-bottom: 20px;">
+                <span style="font-family: 'Montserrat', sans-serif; font-size: 24px; font-weight: 800; color: #0f172a;">SVC</span>
               </div>
-              <h1 style="font-family: 'Georgia', serif; font-size: 32px; font-weight: 400; color: #ffffff; margin: 0 0 16px 0; letter-spacing: 1px; line-height: 1.3;">
+              <h1 style="font-family: 'Montserrat', sans-serif; font-size: 26px; font-weight: 700; color: #ffffff; margin: 0 0 10px 0;">
                 ${escapeHtml(title)}
               </h1>
-              <div style="width: 80px; height: 2px; background: linear-gradient(90deg, transparent, #d4af37, transparent); margin: 0 auto;"></div>
-            </td>
-          </tr>
-
-          <!-- Hero Statement -->
-          <tr>
-            <td style="background: #ffffff; padding: 50px 50px 40px 50px; text-align: center;">
-              <p style="font-family: 'Georgia', serif; font-size: 22px; font-style: italic; color: #1e3a5f; margin: 0; line-height: 1.6;">
-                "Where Vision Meets Capital"
+              <p style="font-size: 15px; color: #93c5fd; margin: 0;">
+                Your Vision. Our Capital. Limitless Potential.
               </p>
             </td>
           </tr>
 
           <!-- Content -->
           <tr>
-            <td style="background: #ffffff; padding: 0 50px 40px 50px;">
-              <div style="border-left: 3px solid #d4af37; padding-left: 24px;">
-                ${formatContentElegant(content)}
+            <td style="padding: 40px;">
+              ${formatContent(content)}
+
+              <!-- CTA -->
+              <div style="text-align: center; margin: 32px 0;">
+                <a href="https://www.stablevaluecapital.com/contact" style="display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); color: #ffffff; text-decoration: none; font-family: 'Montserrat', sans-serif; font-size: 15px; font-weight: 600; border-radius: 8px;">
+                  Connect With Us
+                </a>
+              </div>
+              <p style="text-align: center; font-family: 'Open Sans', sans-serif; font-size: 14px; color: #64748b; margin: 16px 0;">
+                Or reply directly to this email
+              </p>
+            </td>
+          </tr>
+
+          <!-- Services -->
+          <tr>
+            <td style="padding: 0 40px 32px 40px;">
+              <div style="background: linear-gradient(135deg, #f8fafc 0%, #e0e7ff 100%); border-radius: 12px; padding: 24px;">
+                <h2 style="font-family: 'Montserrat', sans-serif; font-size: 18px; font-weight: 700; color: #0f172a; margin: 0 0 16px 0;">
+                  Our Expertise
+                </h2>
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                  <tr><td style="padding-bottom: 10px;"><span style="color: #3b82f6;">&#10003;</span> <span style="color: #334155; font-family: 'Open Sans', sans-serif; font-size: 14px;">Wealth Management & Portfolio Optimization</span></td></tr>
+                  <tr><td style="padding-bottom: 10px;"><span style="color: #3b82f6;">&#10003;</span> <span style="color: #334155; font-family: 'Open Sans', sans-serif; font-size: 14px;">Private Placements & Strategic Funds</span></td></tr>
+                  <tr><td style="padding-bottom: 10px;"><span style="color: #3b82f6;">&#10003;</span> <span style="color: #334155; font-family: 'Open Sans', sans-serif; font-size: 14px;">Project Funding & Capital Solutions</span></td></tr>
+                  <tr><td style="padding-bottom: 10px;"><span style="color: #3b82f6;">&#10003;</span> <span style="color: #334155; font-family: 'Open Sans', sans-serif; font-size: 14px;">Business Loans & Credit Enhancement</span></td></tr>
+                  <tr><td><span style="color: #3b82f6;">&#10003;</span> <span style="color: #334155; font-family: 'Open Sans', sans-serif; font-size: 14px;">Securities Lending Programs</span></td></tr>
+                </table>
               </div>
             </td>
           </tr>
 
-          <!-- CTA Section -->
+          <!-- Footer -->
           <tr>
-            <td style="background: #ffffff; padding: 0 50px 50px 50px; text-align: center;">
-              <a href="https://www.stablevaluecapital.com/contact" style="display: inline-block; padding: 18px 40px; background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%); color: #ffffff; text-decoration: none; font-family: 'Georgia', serif; font-size: 16px; font-weight: 600; border-radius: 4px; border: 1px solid #d4af37; box-shadow: 0 8px 24px rgba(15, 23, 42, 0.3);">
-                Begin Your Journey
-              </a>
-              <p style="font-family: 'Open Sans', sans-serif; font-size: 13px; color: #64748b; margin: 20px 0 0 0;">
-                or reply directly to this email
+            <td style="background: #0f172a; padding: 32px 40px; text-align: center;">
+              <p style="font-family: 'Montserrat', sans-serif; font-size: 18px; font-weight: 700; color: #ffffff; margin: 0 0 12px 0;">
+                Stable Value Capital
               </p>
-            </td>
-          </tr>
-
-          <!-- Stats Bar -->
-          <tr>
-            <td style="background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); padding: 30px 50px;">
-              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
-                <tr>
-                  <td align="center" width="33%">
-                    <div style="font-family: 'Georgia', serif; font-size: 36px; font-weight: 700; color: #1e3a5f;">200+</div>
-                    <div style="font-family: 'Open Sans', sans-serif; font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 1px;">Investor Partners</div>
-                  </td>
-                  <td align="center" width="33%" style="border-left: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0;">
-                    <div style="font-family: 'Georgia', serif; font-size: 36px; font-weight: 700; color: #1e3a5f;">40+</div>
-                    <div style="font-family: 'Open Sans', sans-serif; font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 1px;">Countries Served</div>
-                  </td>
-                  <td align="center" width="33%">
-                    <div style="font-family: 'Georgia', serif; font-size: 36px; font-weight: 700; color: #1e3a5f;">$500M+</div>
-                    <div style="font-family: 'Open Sans', sans-serif; font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 1px;">Capital Deployed</div>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-
-          <!-- Services Grid -->
-          <tr>
-            <td style="background: #ffffff; padding: 40px 50px;">
-              <p style="font-family: 'Georgia', serif; font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #d4af37; margin: 0 0 20px 0; text-align: center;">Our Expertise</p>
-              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
-                <tr>
-                  <td style="padding: 12px 0; border-bottom: 1px solid #f1f5f9;">
-                    <span style="font-family: 'Open Sans', sans-serif; font-size: 14px; color: #334155;">&#9670;</span>
-                    <span style="font-family: 'Open Sans', sans-serif; font-size: 14px; color: #1e3a5f; margin-left: 8px;">Wealth Management & Portfolio Optimization</span>
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding: 12px 0; border-bottom: 1px solid #f1f5f9;">
-                    <span style="font-family: 'Open Sans', sans-serif; font-size: 14px; color: #334155;">&#9670;</span>
-                    <span style="font-family: 'Open Sans', sans-serif; font-size: 14px; color: #1e3a5f; margin-left: 8px;">Private Placements & Strategic Funds</span>
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding: 12px 0; border-bottom: 1px solid #f1f5f9;">
-                    <span style="font-family: 'Open Sans', sans-serif; font-size: 14px; color: #334155;">&#9670;</span>
-                    <span style="font-family: 'Open Sans', sans-serif; font-size: 14px; color: #1e3a5f; margin-left: 8px;">Project Funding & Capital Solutions</span>
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding: 12px 0; border-bottom: 1px solid #f1f5f9;">
-                    <span style="font-family: 'Open Sans', sans-serif; font-size: 14px; color: #334155;">&#9670;</span>
-                    <span style="font-family: 'Open Sans', sans-serif; font-size: 14px; color: #1e3a5f; margin-left: 8px;">Business Loans & Credit Enhancement</span>
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding: 12px 0;">
-                    <span style="font-family: 'Open Sans', sans-serif; font-size: 14px; color: #334155;">&#9670;</span>
-                    <span style="font-family: 'Open Sans', sans-serif; font-size: 14px; color: #1e3a5f; margin-left: 8px;">Securities Lending Programs</span>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-
-          <!-- Elegant Footer -->
-          <tr>
-            <td style="background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%); padding: 50px; text-align: center; border-bottom-left-radius: 20px; border-bottom-right-radius: 20px;">
-              <p style="font-family: 'Georgia', serif; font-size: 24px; color: #d4af37; margin: 0 0 16px 0; letter-spacing: 2px;">
-                STABLE VALUE CAPITAL
-              </p>
-              <p style="font-family: 'Open Sans', sans-serif; font-size: 14px; color: #94a3b8; margin: 0 0 24px 0;">
+              <p style="font-family: 'Open Sans', sans-serif; font-size: 13px; color: #94a3b8; margin: 0 0 16px 0;">
                 Strategic Capital for Visionary Leaders
               </p>
-              <div style="width: 60px; height: 1px; background: #d4af37; margin: 0 auto 24px auto;"></div>
-              <p style="font-family: 'Open Sans', sans-serif; font-size: 13px; color: #64748b; margin: 0 0 8px 0;">
-                <a href="https://www.stablevaluecapital.com" style="color: #94a3b8; text-decoration: none;">www.stablevaluecapital.com</a>
+              <p style="font-family: 'Open Sans', sans-serif; font-size: 13px; color: #60a5fa; margin: 0 0 8px 0;">
+                <a href="https://www.stablevaluecapital.com" style="color: #60a5fa; text-decoration: none;">www.stablevaluecapital.com</a>
               </p>
-              <p style="font-family: 'Open Sans', sans-serif; font-size: 13px; color: #64748b; margin: 0 0 8px 0;">
+              <p style="font-family: 'Open Sans', sans-serif; font-size: 12px; color: #64748b; margin: 0;">
                 info@stablevaluecapital.com | +1 404 295 8687
               </p>
               <p style="font-family: 'Open Sans', sans-serif; font-size: 11px; color: #475569; margin: 16px 0 0 0;">
-                Hamburg, NY | London | Dubai
-              </p>
-              <p style="font-family: 'Open Sans', sans-serif; font-size: 10px; color: #334155; margin: 16px 0 0 0; opacity: 0.7;">
-                (c) 2024 Stable Value Capital. For Accredited & Sophisticated Investors Only.
+                (c) 2024 Stable Value Capital. All rights reserved.
               </p>
             </td>
           </tr>
@@ -581,7 +548,11 @@ function generateMarketingTemplate2(content: string, title: string): string {
 </html>`;
 }
 
-function formatContentElegant(content: string): string {
-  const paragraphs = content.split('\n').filter(line => line.trim());
-  return paragraphs.map(p => `<p style="font-family: 'Open Sans', -apple-system, sans-serif; font-size: 15px; line-height: 1.8; color: #334155; margin: 0 0 16px 0;">${escapeHtml(p.trim())}</p>`).join('\n');
+function escapeHtml(unsafe: string): string {
+  return unsafe
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }

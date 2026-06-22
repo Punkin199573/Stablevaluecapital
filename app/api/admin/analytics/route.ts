@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { getSupabaseAdmin } from '@/lib/supabase';
 
-function getResend() {
+function getEmailClient() {
   const key = process.env.RESEND_API_KEY;
   if (!key) {
-    throw new Error('RESEND_API_KEY is not configured');
+    throw new Error('Email service not configured');
   }
   return new Resend(key);
 }
@@ -24,100 +24,112 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const resend = getResend();
+    const emailClient = getEmailClient();
     const supabase = getSupabaseAdmin();
 
-    // Get query parameters
     const { searchParams } = new URL(request.url);
     const campaignId = searchParams.get('campaignId');
     const emailId = searchParams.get('emailId');
+    const page = parseInt(searchParams.get('page') || '1');
+    const limit = parseInt(searchParams.get('limit') || '100');
 
     // If specific email requested
     if (emailId) {
-      const { data, error } = await resend.emails.get(emailId);
+      const { data, error } = await emailClient.emails.get(emailId);
       if (error) {
-        return NextResponse.json({ error: error.message }, { status: 400 });
+        return NextResponse.json({ error: 'Failed to fetch email details' }, { status: 400 });
       }
       return NextResponse.json({ success: true, email: data });
     }
 
-    // Get recent emails from Resend
-    const { data: emailsResult, error: listError } = await resend.emails.list({ limit: 100 });
+    // Get emails with pagination
+    let allEmails: any[] = [];
+    let afterId: string | undefined = undefined;
+    const maxPages = 10; // Fetch up to 1000 emails max
 
-    if (listError) {
-      console.error('[Analytics] Error listing emails:', listError);
-      return NextResponse.json({ error: 'Failed to fetch emails from Resend' }, { status: 500 });
+    for (let i = 0; i < maxPages; i++) {
+      const listParams: any = { limit: 100 };
+      if (afterId) {
+        listParams.after = afterId;
+      }
+
+      const { data: emailsResult, error: listError } = await emailClient.emails.list(listParams);
+
+      if (listError) {
+        console.error('[Analytics] Error listing emails:', listError);
+        break;
+      }
+
+      if (emailsResult?.data && emailsResult.data.length > 0) {
+        allEmails = allEmails.concat(emailsResult.data);
+        afterId = emailsResult.data[emailsResult.data.length - 1].id;
+        if (emailsResult.data.length < 100) break;
+      } else {
+        break;
+      }
     }
 
-    // Get campaigns with analytics
+    // Get campaigns with analytics from database
     const { data: campaigns, error: campaignError } = await supabase
       .from('newsletter_campaigns')
       .select('*')
       .order('created_at', { ascending: false })
-      .limit(50);
+      .limit(100);
 
     if (campaignError) {
       console.error('[Analytics] Error fetching campaigns:', campaignError);
     }
 
-    // Calculate aggregate stats
+    // Calculate aggregate stats from database (more accurate)
+    const { data: dbStats } = await supabase
+      .from('newsletter_campaigns')
+      .select('sent_count, failed_count, opens_count, clicks_count, delivered_count, bounced_count, complained_count')
+      .eq('status', 'sent');
+
     const stats = {
-      totalSent: emailsResult?.data?.length || 0,
-      delivered: 0,
-      bounced: 0,
-      opened: 0,
-      clicked: 0,
-      complained: 0,
+      totalSent: dbStats?.reduce((sum: number, c: any) => sum + (c.sent_count || 0), 0) || allEmails.length,
+      delivered: dbStats?.reduce((sum: number, c: any) => sum + (c.delivered_count || 0), 0) || 0,
+      bounced: dbStats?.reduce((sum: number, c: any) => sum + (c.bounced_count || 0), 0) || 0,
+      opened: dbStats?.reduce((sum: number, c: any) => sum + (c.opens_count || 0), 0) || 0,
+      clicked: dbStats?.reduce((sum: number, c: any) => sum + (c.clicks_count || 0), 0) || 0,
+      complained: dbStats?.reduce((sum: number, c: any) => sum + (c.complained_count || 0), 0) || 0,
     };
-
-    // Count email statuses
-    const emailStatusCounts: Record<string, number> = {};
-    emailsResult?.data?.forEach((email: any) => {
-      const lastEvent = email.last_event || 'sent';
-      emailStatusCounts[lastEvent] = (emailStatusCounts[lastEvent] || 0) + 1;
-
-      switch (lastEvent) {
-        case 'delivered':
-          stats.delivered++;
-          break;
-        case 'bounced':
-          stats.bounced++;
-          break;
-        case 'opened':
-          stats.opened++;
-          stats.delivered++; // opened implies delivered
-          break;
-        case 'clicked':
-          stats.clicked++;
-          stats.opened++; // clicked implies opened
-          stats.delivered++;
-          break;
-        case 'complained':
-          stats.complained++;
-          break;
-      }
-    });
 
     // If specific campaign, get detailed analytics
     let campaignAnalytics = null;
+    let emailLogs: any[] = [];
+
     if (campaignId) {
-      // Fetch detailed email info for campaign
+      // Get tracking data for campaign
       const { data: trackingData, error: trackingError } = await supabase
         .from('email_tracking')
         .select('*')
-        .eq('campaign_id', campaignId);
+        .eq('campaign_id', campaignId)
+        .order('created_at', { ascending: false });
 
-      if (!trackingError && trackingData && trackingData.length > 0) {
+      if (!trackingError && trackingData) {
+        emailLogs = trackingData.map((t: any) => ({
+          id: t.id,
+          email: t.recipient_email,
+          status: t.status,
+          sentAt: t.created_at,
+          deliveredAt: t.delivered_at,
+          openedAt: t.opened_at,
+          clickedAt: t.clicked_at,
+          bouncedAt: t.bounced_at,
+        }));
+
         campaignAnalytics = {
           totalTracked: trackingData.length,
-          delivered: trackingData.filter((t: any) => t.status === 'delivered' || t.status === 'opened' || t.status === 'clicked').length,
-          opened: trackingData.filter((t: any) => t.status === 'opened' || t.status === 'clicked').length,
+          delivered: trackingData.filter((t: any) => ['delivered', 'opened', 'clicked'].includes(t.status)).length,
+          opened: trackingData.filter((t: any) => ['opened', 'clicked'].includes(t.status)).length,
           clicked: trackingData.filter((t: any) => t.status === 'clicked').length,
           bounced: trackingData.filter((t: any) => t.status === 'bounced').length,
+          failed: trackingData.filter((t: any) => ['bounced', 'failed'].includes(t.status)).length,
         };
       }
 
-      // Get campaign with updated analytics
+      // Get campaign details
       const { data: campaignData } = await supabase
         .from('newsletter_campaigns')
         .select('*')
@@ -127,20 +139,37 @@ export async function GET(request: NextRequest) {
       if (campaignData) {
         campaignAnalytics = {
           ...campaignAnalytics,
-          sentCount: campaignData.sent_count,
-          failedCount: campaignData.failed_count,
-          opensCount: campaignData.opens_count,
-          clicksCount: campaignData.clicks_count,
+          sentCount: campaignData.sent_count || 0,
+          failedCount: campaignData.failed_count || 0,
+          opensCount: campaignData.opens_count || 0,
+          clicksCount: campaignData.clicks_count || 0,
+          deliveredCount: campaignData.delivered_count || 0,
+          bouncedCount: campaignData.bounced_count || 0,
+          title: campaignData.title,
+          createdAt: campaignData.created_at,
+          sentAt: campaignData.sent_at,
         };
       }
+    }
+
+    // Build email logs from all emails if no campaign specified
+    if (!campaignId && allEmails.length > 0) {
+      emailLogs = allEmails.slice(0, 200).map((email: any) => ({
+        id: email.id,
+        email: email.to?.[0] || 'Unknown',
+        subject: email.subject || 'No Subject',
+        status: email.last_event || 'sent',
+        sentAt: email.created_at,
+      }));
     }
 
     return NextResponse.json({
       success: true,
       stats,
-      emailStatusCounts,
       campaigns: campaigns || [],
       campaignAnalytics,
+      emailLogs,
+      totalPages: Math.ceil(allEmails.length / limit),
     });
   } catch (error) {
     console.error('[Analytics] Error:', error);
@@ -151,7 +180,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Sync analytics from Resend for a specific campaign
+// Sync analytics for a campaign (batch processing)
 export async function POST(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization');
@@ -162,67 +191,82 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { campaignId, resendEmailIds } = body;
+    const { campaignId, emailIds } = body;
 
-    if (!campaignId || !resendEmailIds || !Array.isArray(resendEmailIds)) {
-      return NextResponse.json({ error: 'Campaign ID and email IDs required' }, { status: 400 });
+    if (!campaignId) {
+      return NextResponse.json({ error: 'Campaign ID required' }, { status: 400 });
     }
 
-    const resend = getResend();
+    const emailClient = getEmailClient();
     const supabase = getSupabaseAdmin();
 
-    let delivered = 0,
-      opened = 0,
-      clicked = 0,
-      bounced = 0,
-      complained = 0;
+    // Get all tracking records for this campaign
+    const { data: trackingRecords, error: trackError } = await supabase
+      .from('email_tracking')
+      .select('id, resend_email_id, recipient_email')
+      .eq('campaign_id', campaignId);
 
-    // Fetch status for each email
-    for (const emailId of resendEmailIds.slice(0, 50)) {
-      try {
-        const { data: emailData, error } = await resend.emails.get(emailId);
-        if (error || !emailData) continue;
+    if (trackError || !trackingRecords || trackingRecords.length === 0) {
+      return NextResponse.json({
+        success: true,
+        message: 'No emails to sync',
+        analytics: { delivered: 0, opened: 0, clicked: 0, bounced: 0, complained: 0 }
+      });
+    }
 
-        const lastEvent = (emailData as any).last_event || 'sent';
-        switch (lastEvent) {
-          case 'delivered':
-            delivered++;
-            break;
-          case 'opened':
-            delivered++;
-            opened++;
-            break;
-          case 'clicked':
-            delivered++;
-            opened++;
-            clicked++;
-            break;
-          case 'bounced':
-            bounced++;
-            break;
-          case 'complained':
-            complained++;
-            delivered++;
-            break;
+    let delivered = 0, opened = 0, clicked = 0, bounced = 0, complained = 0;
+    const batchSize = 50;
+
+    // Process in batches
+    for (let i = 0; i < trackingRecords.length; i += batchSize) {
+      const batch = trackingRecords.slice(i, i + batchSize);
+
+      for (const record of batch) {
+        try {
+          if (!record.resend_email_id) continue;
+
+          const { data: emailData, error } = await emailClient.emails.get(record.resend_email_id);
+          if (error || !emailData) continue;
+
+          const lastEvent = (emailData as any).last_event || 'sent';
+
+          switch (lastEvent) {
+            case 'delivered':
+              delivered++;
+              break;
+            case 'opened':
+              delivered++;
+              opened++;
+              break;
+            case 'clicked':
+              delivered++;
+              opened++;
+              clicked++;
+              break;
+            case 'bounced':
+              bounced++;
+              break;
+            case 'complained':
+              complained++;
+              delivered++;
+              break;
+          }
+
+          // Update tracking record
+          await supabase
+            .from('email_tracking')
+            .update({
+              status: lastEvent,
+              delivered_at: ['delivered', 'opened', 'clicked'].includes(lastEvent) ? new Date().toISOString() : null,
+              opened_at: ['opened', 'clicked'].includes(lastEvent) ? new Date().toISOString() : null,
+              clicked_at: lastEvent === 'clicked' ? new Date().toISOString() : null,
+              bounced_at: lastEvent === 'bounced' ? new Date().toISOString() : null,
+            })
+            .eq('id', record.id);
+
+        } catch (e) {
+          console.error('[Analytics] Error syncing email:', record.resend_email_id, e);
         }
-
-        // Upsert tracking record
-        const recipientEmail = (emailData as any).to?.[0] || 'unknown';
-        await supabase.from('email_tracking').upsert(
-          {
-            campaign_id: campaignId,
-            resend_email_id: emailId,
-            recipient_email: recipientEmail,
-            status: lastEvent,
-            delivered_at: lastEvent === 'delivered' ? new Date().toISOString() : null,
-            opened_at: lastEvent === 'opened' || lastEvent === 'clicked' ? new Date().toISOString() : null,
-            clicked_at: lastEvent === 'clicked' ? new Date().toISOString() : null,
-            bounced_at: lastEvent === 'bounced' ? new Date().toISOString() : null,
-          },
-          { onConflict: 'resend_email_id' }
-        );
-      } catch (e) {
-        console.error('[Analytics] Error fetching email:', emailId, e);
       }
     }
 
@@ -242,6 +286,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       analytics: { delivered, opened, clicked, bounced, complained },
+      totalProcessed: trackingRecords.length,
     });
   } catch (error) {
     console.error('[Analytics] Sync error:', error);
